@@ -1,0 +1,18 @@
+[package]
+name = "pillreserves"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+derive-new = { version = "0.5" }
+env_logger = { version = "0.8" }
+form_urlencoded = { version = "1.0" }
+hyper = { version = "0.14", features = ["http1", "http2", "server", "tcp"] }
+log = { version = "0.4" }
+once_cell = { version = "1.8" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0" }
+tera = { version = "1.12" }
+tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
+toml = { version = "0.5" }
+url = { version = "2.2" }
