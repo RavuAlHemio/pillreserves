@@ -1,8 +1,11 @@
 use std::cmp::{Ord, Ordering, PartialOrd};
 use std::fmt;
+use std::num::ParseIntError;
 use std::ops;
+use std::str::FromStr;
 
 use derive_new::new;
+use num_traits::cast::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use serde::de::Visitor;
 
@@ -73,6 +76,11 @@ impl Fraction {
 
     pub fn num(&self) -> i64 { self.num }
     pub fn den(&self) -> i64 { self.den }
+    pub fn as_f64(&self) -> f64 {
+        let nf64 = self.num.to_f64().unwrap();
+        let df64 = self.den.to_f64().unwrap();
+        nf64 / df64
+    }
 }
 
 impl Drug {
@@ -124,19 +132,9 @@ impl<'de> Visitor<'de> for FractionVisitor {
     }
 
     fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
-        let slash_pieces: Vec<&str> = v.split('/').collect();
-        if slash_pieces.len() == 1 {
-            let num: i64 = slash_pieces[0].parse()
-                .map_err(|e| E::custom(e))?;
-            Ok(Fraction::new(num, 1))
-        } else if slash_pieces.len() == 2 {
-            let num: i64 = slash_pieces[0].parse()
-                .map_err(|e| E::custom(e))?;
-            let den: i64 = slash_pieces[1].parse()
-                .map_err(|e| E::custom(e))?;
-            Ok(Fraction::new(num, den))
-        } else {
-            Err(E::custom("too many slashes in value"))
+        match v.parse() {
+            Ok(f) => Ok(f),
+            Err(e) => Err(E::custom(e)),
         }
     }
 }
@@ -158,6 +156,50 @@ impl Serialize for Fraction {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum ParseFractionError {
+    FailedToParseSingularNumber(ParseIntError),
+    FailedToParseNumerator(ParseIntError),
+    FailedToParseDenominator(ParseIntError),
+    TooManySlashes,
+}
+impl fmt::Display for ParseFractionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ParseFractionError::FailedToParseSingularNumber(e)
+                => write!(f, "error parsing singular number: {}", e),
+            ParseFractionError::FailedToParseNumerator(e)
+                => write!(f, "error parsing numerator: {}", e),
+            ParseFractionError::FailedToParseDenominator(e)
+                => write!(f, "error parsing denominator: {}", e),
+            ParseFractionError::TooManySlashes
+                => write!(f, "too many slashes in value"),
+        }
+    }
+}
+impl std::error::Error for ParseFractionError {
+}
+
+impl FromStr for Fraction {
+    type Err = ParseFractionError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let slash_pieces: Vec<&str> = s.split('/').collect();
+        if slash_pieces.len() == 1 {
+            let num: i64 = slash_pieces[0].parse()
+                .map_err(|e| ParseFractionError::FailedToParseSingularNumber(e))?;
+            Ok(Fraction::new(num, 1))
+        } else if slash_pieces.len() == 2 {
+            let num: i64 = slash_pieces[0].parse()
+            .map_err(|e| ParseFractionError::FailedToParseNumerator(e))?;
+            let den: i64 = slash_pieces[1].parse()
+            .map_err(|e| ParseFractionError::FailedToParseDenominator(e))?;
+            Ok(Fraction::new(num, den))
+        } else {
+            Err(ParseFractionError::TooManySlashes)
+        }
+    }
+}
 impl PartialOrd for Fraction {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some((self.num * other.den).cmp(&(self.den * other.num)))

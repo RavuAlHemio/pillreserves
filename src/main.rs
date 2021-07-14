@@ -24,6 +24,7 @@ use toml;
 use url::Url;
 
 use crate::model::{Config, Drug, DrugToDisplay, Fraction};
+use crate::util::{BrFilter, FracToFloat};
 
 
 static CONFIG: OnceCell<RwLock<Config>> = OnceCell::new();
@@ -169,15 +170,15 @@ form.replenish input[name=amount] { width: 3em; }
         {% for component in dtd.drug.components %}
             <li>
                 <span class="generic-name">{{ component.generic_name|escape }}</span>
-                <span class="amount">{{ component.amount|escape }}</span>
+                <span class="amount">{{ component.amount|frac2float }}</span>
                 <span class="unit">{{ component.unit|escape }}</span>
             </li>
         {% endfor %}
         </ul>
     </td>
-    <td class="description">{{ dtd.drug.description|escape }}</td>
+    <td class="description">{{ dtd.drug.description|escape|br }}</td>
     <td class="remaining">
-        <span class="total">{{ dtd.drug.remaining|escape }}</span>
+        <span class="total">{{ dtd.drug.remaining|frac2float }}</span>
         {% if dtd.remaining_weeks is number %}
             (<span class="weeks">{{ dtd.remaining_weeks }}</span>)
         {% endif %}
@@ -238,6 +239,8 @@ form.replenish input[name=amount] { width: 3em; }
 
     let mut tera: Tera = Default::default();
     tera.autoescape_on(vec![]);
+    tera.register_filter("br", BrFilter);
+    tera.register_filter("frac2float", FracToFloat);
     let mut ctx = Context::new();
     ctx.insert("drugs_to_display", &data_to_show);
     let body_str = match tera.render_str(template, &ctx) {

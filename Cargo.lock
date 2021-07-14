@@ -593,6 +593,7 @@ dependencies = [
  "form_urlencoded",
  "hyper",
  "log",
+ "num-traits",
  "once_cell",
  "serde",
  "serde_json",
