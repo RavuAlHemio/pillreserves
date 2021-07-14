@@ -142,6 +142,10 @@ th, td { padding: 0.2em 0.4em; vertical-align: top; }
 th { background-color: #603; color: #fff; }
 td.count { text-align: right; }
 td.components ul { margin-top: 0; margin-bottom: 0; padding-inline-start: 15px; }
+@media print {
+    th.replenish, td.replenish { display: none; }
+    form { display: none; }
+}
 </style>
 </head>
 <body>
@@ -186,8 +190,8 @@ td.components ul { margin-top: 0; margin-bottom: 0; padding-inline-start: 15px; 
         &#8210;
         <span class="night">{{ dtd.drug.dosage_night|escape }}</span>
     </td>
-    <td>
-        <form method="post">
+    <td class="replenish">
+        <form method="post" class="replenish">
             <input type="hidden" name="do" value="replenish" />
             <input type="hidden" name="drug-index" value="{{ dtd.index }}" />
             <input type="number" name="amount" />
@@ -200,7 +204,7 @@ td.components ul { margin-top: 0; margin-bottom: 0; padding-inline-start: 15px; 
 </table>
 
 <p>
-    <form method="post">
+    <form method="post" class="take-week">
         <input type="hidden" name="do" value="take-week" />
         <input type="submit" value="Reduce by a week" />
     </form>
