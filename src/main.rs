@@ -142,6 +142,7 @@ th, td { padding: 0.2em 0.4em; vertical-align: top; }
 th { background-color: #603; color: #fff; }
 td.count { text-align: right; }
 td.components ul { margin-top: 0; margin-bottom: 0; padding-inline-start: 15px; }
+form.replenish input[name=amount] { width: 3em; }
 @media print {
     th.replenish, td.replenish { display: none; }
     form { display: none; }
