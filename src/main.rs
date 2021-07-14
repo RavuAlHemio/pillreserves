@@ -303,8 +303,8 @@ async fn handle_post(request: Request<Body>) -> Result<Response<Body>, Infallibl
                 Ok(i) => i,
                 Err(_) => return respond_400("invalid value for \"amount\""),
             };
-            if amount <= 0 {
-                return respond_400("\"amount\" must be greater than 0");
+            if amount == 0 {
+                return respond_400("\"amount\" must not be 0");
             }
 
             data[index].replenish(&Fraction::new(amount, 1));
