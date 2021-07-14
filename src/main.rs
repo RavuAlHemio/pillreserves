@@ -140,10 +140,12 @@ async fn handle_get(_request: Request<Body>) -> Result<Response<Body>, Infallibl
 body { font-family: sans-serif; }
 table, th, td { border: 1px solid #ccc; }
 th, td { padding: 0.2em 0.4em; vertical-align: top; }
-th { background-color: #603; color: #fff; }
 td.count { text-align: right; }
 td.components ul { margin-top: 0; margin-bottom: 0; padding-inline-start: 15px; }
 form.replenish input[name=amount] { width: 3em; }
+@media (color) {
+    th { background-color: #603; color: #fff; }
+}
 @media print {
     th.replenish, td.replenish { display: none; }
     form { display: none; }
