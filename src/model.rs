@@ -23,6 +23,8 @@ pub(crate) struct Drug {
     dosage_evening: Rational64,
     dosage_night: Rational64,
     show: bool,
+    obverse_photo: Option<String>,
+    reverse_photo: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, new, PartialEq, Serialize)]
@@ -50,6 +52,8 @@ impl Drug {
     pub fn dosage_evening(&self) -> Rational64 { self.dosage_evening }
     pub fn dosage_night(&self) -> Rational64 { self.dosage_night }
     pub fn show(&self) -> bool { self.show }
+    pub fn obverse_photo(&self) -> Option<&str> { self.obverse_photo.as_ref().map(|s| s.as_str()) }
+    pub fn reverse_photo(&self) -> Option<&str> { self.reverse_photo.as_ref().map(|s| s.as_str()) }
 
     pub fn total_dosage_day(&self) -> Rational64 {
         self.dosage_morning + self.dosage_noon + self.dosage_evening + self.dosage_night

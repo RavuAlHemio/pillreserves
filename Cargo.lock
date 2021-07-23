@@ -612,14 +612,17 @@ dependencies = [
 name = "pillreserves"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "derive-new",
  "env_logger",
  "form_urlencoded",
+ "http",
  "hyper",
  "log",
  "num-rational",
  "num-traits",
  "once_cell",
+ "regex",
  "serde",
  "serde_json",
  "tera",

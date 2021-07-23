@@ -3,21 +3,24 @@ mod util;
 
 
 use std::collections::HashMap;
-use std::convert::Infallible;
+use std::convert::{Infallible, TryInto};
 use std::env;
 use std::ffi::OsString;
-use std::fs::File;
-use std::io::Read;
+use std::fs::{self, File};
+use std::io::{self, Read};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
+use chrono::{DateTime, TimeZone, Utc};
 use env_logger;
 use form_urlencoded;
+use http::header::IF_MODIFIED_SINCE;
 use hyper::{Body, Method, Request, Response, Server};
 use hyper::service::{make_service_fn, service_fn};
 use log::error;
 use num_rational::Rational64;
-use once_cell::sync::OnceCell;
+use once_cell::sync::{Lazy, OnceCell};
+use regex::Regex;
 use serde_json;
 use tera::{Context, Tera};
 use tokio::sync::RwLock;
@@ -25,10 +28,16 @@ use toml;
 use url::Url;
 
 use crate::model::{Config, Drug, DrugToDisplay};
-use crate::util::{BrFilter, FracToFloat};
+use crate::util::{BrFilter, FracToFloat, FracToStr};
+
+
+const HTTP_TIMESTAMP_FORMAT: &'static str = "%a, %d %b %Y %H:%M:%S GMT";
 
 
 static CONFIG: OnceCell<RwLock<Config>> = OnceCell::new();
+static IMAGE_PATH_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(
+    "^/images/(?P<filename>[A-Za-z0-9-_]+[.][A-Za-z0-9]+)$"
+).expect("failed to compile regex"));
 
 
 async fn load_data() -> Option<Vec<Drug>> {
@@ -82,15 +91,30 @@ async fn store_data(data: &[Drug]) -> bool {
 fn respond_500() -> Result<Response<Body>, Infallible> {
     let resp_body = Body::from("500 Something Went Wrong On The Server");
     let resp = Response::builder()
+        .status(500)
         .header("Content-Type", "text/plain; charset=utf-8")
         .body(resp_body)
         .expect("failed to build body");
     Ok(resp)
 }
 
+fn respond_304() -> Result<Response<Body>, Infallible> {
+    let resp_res = Response::builder()
+        .status(304)
+        .body(Body::empty());
+    match resp_res {
+        Ok(resp) => Ok(resp),
+        Err(e) => {
+            error!("failed to assemble 304 response body: {}", e);
+            return respond_500();
+        },
+    }
+}
+
 fn respond_400(message: &str) -> Result<Response<Body>, Infallible> {
     let resp_body = Body::from(format!("400 Bad Request: {}", message));
     let resp_res = Response::builder()
+        .status(400)
         .header("Content-Type", "text/plain; charset=utf-8")
         .body(resp_body);
     match resp_res {
@@ -105,6 +129,7 @@ fn respond_400(message: &str) -> Result<Response<Body>, Infallible> {
 fn respond_403() -> Result<Response<Body>, Infallible> {
     let resp_body = Body::from("403 Forbidden; token missing or invalid");
     let resp_res = Response::builder()
+        .status(403)
         .header("Content-Type", "text/plain; charset=utf-8")
         .body(resp_body);
     match resp_res {
@@ -116,11 +141,27 @@ fn respond_403() -> Result<Response<Body>, Infallible> {
     }
 }
 
-fn respond_405() -> Result<Response<Body>, Infallible> {
-    let resp_body = Body::from("405 Wrong Method; try GET or POST");
+fn respond_404() -> Result<Response<Body>, Infallible> {
+    let resp_body = Body::from("404 Not Found; where the h*ck is it?");
     let resp_res = Response::builder()
+        .status(404)
         .header("Content-Type", "text/plain; charset=utf-8")
-        .header("Allowed", "GET, POST")
+        .body(resp_body);
+    match resp_res {
+        Ok(resp) => Ok(resp),
+        Err(e) => {
+            error!("failed to assemble 404 response body: {}", e);
+            return respond_500();
+        },
+    }
+}
+
+fn respond_405(allowed: &str) -> Result<Response<Body>, Infallible> {
+    let resp_body = Body::from(format!("405 Wrong Method; try one of: {}", allowed));
+    let resp_res = Response::builder()
+        .status(405)
+        .header("Content-Type", "text/plain; charset=utf-8")
+        .header("Allowed", allowed)
         .body(resp_body);
     match resp_res {
         Ok(resp) => Ok(resp),
@@ -157,6 +198,8 @@ form.replenish input[name=amount] { width: 3em; }
 <h1>Pill Reserves</h1>
 <table>
 <tr>
+    <th class="obverse-photo">Obverse</th>
+    <th class="reverse-photo">Reverse</th>
     <th class="trade-name">Trade name</th>
     <th class="components">Components</th>
     <th class="description">Description</th>
@@ -167,6 +210,16 @@ form.replenish input[name=amount] { width: 3em; }
 {% for dtd in drugs_to_display %}
 {% if dtd.drug.show %}
 <tr>
+    <td class="obverse-photo">
+        {%- if dtd.drug.obverse_photo -%}
+            <img src="images/{{ dtd.drug.obverse_photo|urlencode_strict|escape }}" width="100" height="80" />
+        {%- endif -%}
+    </td>
+    <td class="reverse-photo">
+        {%- if dtd.drug.reverse_photo -%}
+            <img src="images/{{ dtd.drug.reverse_photo|urlencode_strict|escape }}" width="100" height="80" />
+        {%- endif -%}
+    </td>
     <td class="trade-name">{{ dtd.drug.trade_name|escape }}</td>
     <td class="components">
         <ul>
@@ -383,7 +436,117 @@ async fn handle_post(request: Request<Body>) -> Result<Response<Body>, Infallibl
     }
 }
 
+async fn handle_get_image(request: Request<Body>) -> Result<Response<Body>, Infallible> {
+    let path_caps = match IMAGE_PATH_REGEX.captures(request.uri().path()) {
+        Some(pc) => pc,
+        None => return respond_404(),
+    };
+    let filename_match = path_caps.name("filename")
+        .expect("unmatched filename capture");
+    let filename = filename_match.as_str();
+
+    let mut path = PathBuf::from("images");
+    path.push(filename);
+
+    let file_meta = match fs::metadata(&path) {
+        Ok(fm) => fm,
+        Err(e) => {
+            return if e.kind() == io::ErrorKind::NotFound {
+                respond_404()
+            } else {
+                error!("error obtaining file {:?} metadata: {}", filename, e);
+                respond_500()
+            };
+        },
+    };
+
+    if let Some(ims) = request.headers().get(IF_MODIFIED_SINCE) {
+        if let Ok(ims_str) = ims.to_str() {
+            if let Ok(timestamp) = Utc.datetime_from_str(ims_str, HTTP_TIMESTAMP_FORMAT) {
+                if let Ok(modified) = file_meta.modified() {
+                    let modified_timestamp: DateTime<Utc> = modified.into();
+                    if modified_timestamp <= timestamp {
+                        return respond_304();
+                    }
+                }
+            }
+        }
+    }
+
+    let mut last_mod_text_opt: Option<String> = None;
+    if let Ok(modified) = file_meta.modified() {
+        let modified_timestamp: DateTime<Utc> = modified.into();
+        last_mod_text_opt = Some(modified_timestamp.format(HTTP_TIMESTAMP_FORMAT).to_string());
+    }
+
+    // FIXME: stream the file?
+    let file_bytes = {
+        let mut file = match File::open(path) {
+            Ok(f) => f,
+            Err(e) => {
+                return if e.kind() == io::ErrorKind::NotFound {
+                    respond_404()
+                } else {
+                    error!("error opening file {:?}: {}", filename, e);
+                    respond_500()
+                };
+            },
+        };
+
+        let mut buf = if let Ok(meta_len) = file_meta.len().try_into() {
+            Vec::with_capacity(meta_len)
+        } else {
+            Vec::new()
+        };
+        if let Err(e) = file.read_to_end(&mut buf) {
+            error!("error reading file {:?}: {}", filename, e);
+            return respond_500();
+        }
+
+        buf
+    };
+
+    let content_type = if filename.ends_with(".jpg") || filename.ends_with(".jpeg") {
+        "image/jpeg"
+    } else if filename.ends_with(".png") {
+        "image/png"
+    } else {
+        "application/octet-stream"
+    };
+
+    let resp_len = file_bytes.len();
+    let resp_body = Body::from(file_bytes);
+    let mut resp_builder = Response::builder()
+        .header("Content-Type", content_type)
+        .header("Content-Length", resp_len.to_string());
+    if let Some(lmt) = last_mod_text_opt {
+        resp_builder = resp_builder.header("Last-Modified", lmt);
+    }
+    let resp_res = resp_builder
+        .body(resp_body);
+    match resp_res {
+        Ok(r) => Ok(r),
+        Err(e) => {
+            error!("failed to assemble response body: {}", e);
+            return respond_500();
+        },
+    }
+}
+
 async fn handle_request(request: Request<Body>) -> Result<Response<Body>, Infallible> {
+    let uri_path = request.uri().path();
+
+    // unauthenticated endpoints first
+    if uri_path.starts_with("/images/") {
+        return if request.method() == Method::GET {
+            handle_get_image(request).await
+        } else {
+            respond_405("GET")
+        };
+    }
+
+    // authentication starts here
+
     // check for token
     let query_str = match request.uri().query() {
         None => return respond_403(),
@@ -416,7 +579,7 @@ async fn handle_request(request: Request<Body>) -> Result<Response<Body>, Infall
     } else if request.method() == Method::POST {
         handle_post(request).await
     } else {
-        respond_405()
+        respond_405("GET, POST")
     }
 }
 
