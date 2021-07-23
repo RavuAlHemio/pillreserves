@@ -9,6 +9,7 @@ env_logger = { version = "0.8" }
 form_urlencoded = { version = "1.0" }
 hyper = { version = "0.14", features = ["http1", "http2", "server", "tcp"] }
 log = { version = "0.4" }
+num-rational = { version = "0.4", features = ["serde"] }
 num-traits = { version = "0.2" }
 once_cell = { version = "1.8" }
 serde = { version = "1.0", features = ["derive"] }

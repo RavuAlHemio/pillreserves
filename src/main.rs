@@ -16,6 +16,7 @@ use form_urlencoded;
 use hyper::{Body, Method, Request, Response, Server};
 use hyper::service::{make_service_fn, service_fn};
 use log::error;
+use num_rational::Rational64;
 use once_cell::sync::OnceCell;
 use serde_json;
 use tera::{Context, Tera};
@@ -23,7 +24,7 @@ use tokio::sync::RwLock;
 use toml;
 use url::Url;
 
-use crate::model::{Config, Drug, DrugToDisplay, Fraction};
+use crate::model::{Config, Drug, DrugToDisplay};
 use crate::util::{BrFilter, FracToFloat};
 
 
@@ -186,13 +187,13 @@ form.replenish input[name=amount] { width: 3em; }
         {% endif %}
     </td>
     <td class="dosage">
-        <span class="morning">{{ dtd.drug.dosage_morning|escape }}</span>
+        <span class="morning">{{ dtd.drug.dosage_morning|frac2str|escape }}</span>
         &#8210;
-        <span class="noon">{{ dtd.drug.dosage_noon|escape }}</span>
+        <span class="noon">{{ dtd.drug.dosage_noon|frac2str|escape }}</span>
         &#8210;
-        <span class="evening">{{ dtd.drug.dosage_evening|escape }}</span>
+        <span class="evening">{{ dtd.drug.dosage_evening|frac2str|escape }}</span>
         &#8210;
-        <span class="night">{{ dtd.drug.dosage_night|escape }}</span>
+        <span class="night">{{ dtd.drug.dosage_night|frac2str|escape }}</span>
     </td>
     <td class="replenish">
         <form method="post" class="replenish">
@@ -226,10 +227,10 @@ form.replenish input[name=amount] { width: 3em; }
         .enumerate()
         .map(|(i, d)| {
             // add up total dosage per day
-            let total_dosage_week = d.total_dosage_day() * Fraction::new(7, 1);
-            let full_weeks = if total_dosage_week.num() > 0 {
+            let total_dosage_week = d.total_dosage_day() * Rational64::new(7, 1);
+            let full_weeks = if *total_dosage_week.numer() > 0 {
                 let doses_available = d.remaining() / total_dosage_week;
-                Some(doses_available.num() / doses_available.den())
+                Some(doses_available.numer() / doses_available.denom())
             } else {
                 None
             };
@@ -242,6 +243,7 @@ form.replenish input[name=amount] { width: 3em; }
     let mut tera: Tera = Default::default();
     tera.autoescape_on(vec![]);
     tera.register_filter("br", BrFilter);
+    tera.register_filter("frac2str", FracToStr);
     tera.register_filter("frac2float", FracToFloat);
     let mut ctx = Context::new();
     ctx.insert("drugs_to_display", &data_to_show);
@@ -317,11 +319,11 @@ async fn handle_post(request: Request<Body>) -> Result<Response<Body>, Infallibl
                 return respond_400("\"amount\" must not be 0");
             }
 
-            data[index].replenish(&Fraction::new(amount, 1));
+            data[index].replenish(&Rational64::new(amount, 1));
         },
         "take-week" => {
             for drug in &mut data {
-                let week_dose = drug.total_dosage_day() * Fraction::new(7, 1);
+                let week_dose = drug.total_dosage_day() * Rational64::new(7, 1);
                 drug.reduce(&week_dose);
             }
         },
@@ -362,7 +364,7 @@ async fn handle_post(request: Request<Body>) -> Result<Response<Body>, Infallibl
     let my_url = match base_url.join(relative_path_and_query) {
         Ok(u) => u,
         Err(e) => {
-            error!("failed to join path and query");
+            error!("failed to join path and query: {}", e);
             return respond_500();
         },
     };
