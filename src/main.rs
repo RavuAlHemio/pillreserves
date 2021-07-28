@@ -372,7 +372,8 @@ async fn handle_post(request: Request<Body>) -> Result<Response<Body>, Infallibl
             };
             match amount.cmp(&Zero::zero()) {
                 Ordering::Less => {
-                    data[index].reduce(&amount);
+                    let abs_amount = -amount;
+                    data[index].reduce(&abs_amount);
                 },
                 Ordering::Equal => {
                     return respond_400("\"amount\" must not be 0");

@@ -60,14 +60,17 @@ impl Drug {
     }
 
     pub fn reduce(&mut self, subtrahend: &Rational64) {
-        self.remaining = self.remaining - *subtrahend;
         let zero: Rational64 = Zero::zero();
+        assert!(subtrahend > &zero);
+        self.remaining = self.remaining - *subtrahend;
         if self.remaining < zero {
             self.remaining = zero;
         }
     }
 
     pub fn replenish(&mut self, addend: &Rational64) {
+        let zero: Rational64 = Zero::zero();
+        assert!(addend > &zero);
         self.remaining = self.remaining + *addend;
     }
 }
