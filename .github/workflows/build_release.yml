@@ -1,25 +1,6 @@
-name: pillreserves build
+name: pillreserves release build
 on: [push]
 jobs:
-  build-arch-debug:
-    runs-on: ubuntu-latest
-    container: archlinux:base-devel
-    steps:
-      - name: update packages
-        run: pacman -Syu --noconfirm
-      - name: install packages
-        run: pacman -S --needed --noconfirm cargo git
-      - name: check out repository code
-        uses: actions/checkout@v2
-      - name: run debug build
-        run: cargo build
-      - name: run debug tests
-        run: cargo test
-      - name: upload debug binary
-        uses: actions/upload-artifact@v2
-        with:
-          name: pillreserves-debug
-          path: target/debug/pillreserves
   build-arch-release:
     runs-on: ubuntu-latest
     container: archlinux:base-devel
