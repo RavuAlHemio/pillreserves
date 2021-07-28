@@ -2,6 +2,7 @@ mod model;
 mod util;
 
 
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::{Infallible, TryInto};
 use std::env;
@@ -19,6 +20,7 @@ use hyper::{Body, Method, Request, Response, Server};
 use hyper::service::{make_service_fn, service_fn};
 use log::error;
 use num_rational::Rational64;
+use num_traits::Zero;
 use once_cell::sync::{Lazy, OnceCell};
 use regex::Regex;
 use serde_json;
@@ -28,7 +30,7 @@ use toml;
 use url::Url;
 
 use crate::model::{Config, Drug, DrugToDisplay};
-use crate::util::{BrFilter, FracToFloat, FracToStr};
+use crate::util::{BrFilter, FracToFloat, FracToStr, parse_decimal};
 
 
 const HTTP_TIMESTAMP_FORMAT: &'static str = "%a, %d %b %Y %H:%M:%S GMT";
@@ -252,7 +254,7 @@ form.replenish input[name=amount] { width: 3em; }
         <form method="post" class="replenish">
             <input type="hidden" name="do" value="replenish" />
             <input type="hidden" name="drug-index" value="{{ dtd.index }}" />
-            <input type="number" name="amount" />
+            <input type="number" name="amount" step="0.01" />
             <input type="submit" value="Replenish" />
         </form>
     </td>
@@ -364,15 +366,21 @@ async fn handle_post(request: Request<Body>) -> Result<Response<Body>, Infallibl
                 Some(s) => s,
                 None => return respond_400("missing value for \"amount\""),
             };
-            let amount: i64 = match amount_str.parse() {
+            let amount: Rational64 = match parse_decimal(amount_str) {
                 Ok(i) => i,
                 Err(_) => return respond_400("invalid value for \"amount\""),
             };
-            if amount == 0 {
-                return respond_400("\"amount\" must not be 0");
+            match amount.cmp(&Zero::zero()) {
+                Ordering::Less => {
+                    data[index].reduce(&amount);
+                },
+                Ordering::Equal => {
+                    return respond_400("\"amount\" must not be 0");
+                },
+                Ordering::Greater => {
+                    data[index].replenish(&amount);
+                },
             }
-
-            data[index].replenish(&Rational64::new(amount, 1));
         },
         "take-week" => {
             for drug in &mut data {
