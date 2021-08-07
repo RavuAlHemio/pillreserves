@@ -386,7 +386,9 @@ async fn handle_post(request: Request<Body>) -> Result<Response<Body>, Infallibl
         "take-week" => {
             for drug in &mut data {
                 let week_dose = drug.total_dosage_day() * Rational64::new(7, 1);
-                drug.reduce(&week_dose);
+                if week_dose > Zero::zero() {
+                    drug.reduce(&week_dose);
+                }
             }
         },
         _other => {
