@@ -206,6 +206,7 @@ form.replenish input[name=amount] { width: 3em; }
     <th class="components">Components</th>
     <th class="description">Description</th>
     <th class="remaining">Remaining</th>
+    <th class="package">Per package</th>
     <th class="dosage">Dosage</th>
     <th class="replenish">Replenish</th>
 </tr>
@@ -239,6 +240,12 @@ form.replenish input[name=amount] { width: 3em; }
         <span class="total">{{ dtd.drug.remaining|frac2float }}</span>
         {% if dtd.remaining_weeks is number %}
             (<span class="weeks">{{ dtd.remaining_weeks }}</span>)
+        {% endif %}
+    </td>
+    <td class="package">
+        <span class="single">{{ dtd.drug.units_per_package|frac2float }}</span>
+        {% if dtd.weeks_per_prescription is number %}
+            (<span class="weeks">{{ dtd.weeks_per_prescription }}</span>)
         {% endif %}
     </td>
     <td class="dosage">
@@ -281,7 +288,7 @@ form.replenish input[name=amount] { width: 3em; }
     let data_to_show: Vec<DrugToDisplay> = data.iter()
         .enumerate()
         .map(|(i, d)| {
-            // add up total dosage per day
+            // how many weeks will it last?
             let total_dosage_week = d.total_dosage_day() * Rational64::new(7, 1);
             let full_weeks = if *total_dosage_week.numer() > 0 {
                 let doses_available = d.remaining() / total_dosage_week;
@@ -290,7 +297,15 @@ form.replenish input[name=amount] { width: 3em; }
                 None
             };
 
-            DrugToDisplay::new(i, d.clone(), full_weeks)
+            // how many weeks does a full prescription last?
+            let full_weeks_per_prescription = if *total_dosage_week.numer() > 0 {
+                let weeks_per_prescription = d.units_per_prescription() / total_dosage_week;
+                Some(weeks_per_prescription.numer() / weeks_per_prescription.denom())
+            } else {
+                None
+            };
+
+            DrugToDisplay::new(i, d.clone(), full_weeks, full_weeks_per_prescription)
         })
         .filter(|dtd| dtd.drug().show())
         .collect();
