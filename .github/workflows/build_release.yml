@@ -11,6 +11,8 @@ jobs:
         run: pacman -S --needed --noconfirm cargo git
       - name: check out repository code
         uses: actions/checkout@v2
+      - name: fetch dependencies
+        run: sh ./cicd/cargo_fetch.sh
       - name: run release build
         run: cargo build --release
       - name: run release tests
