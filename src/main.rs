@@ -206,7 +206,7 @@ form.replenish input[name=amount] { width: 3em; }
     <th class="components">Components</th>
     <th class="description">Description</th>
     <th class="remaining">Remaining</th>
-    <th class="package">Per package</th>
+    <th class="prescription">Per prescription</th>
     <th class="dosage">Dosage</th>
     <th class="replenish">Replenish</th>
 </tr>
@@ -242,8 +242,10 @@ form.replenish input[name=amount] { width: 3em; }
             (<span class="weeks">{{ dtd.remaining_weeks }}</span>)
         {% endif %}
     </td>
-    <td class="package">
-        <span class="single">{{ dtd.drug.units_per_package|frac2float }}</span>
+    <td class="prescription">
+        <span class="units-per-package">{{ dtd.drug.units_per_package|frac2float }}</span>
+        &#215;
+        <span class="packages-per-prescription">{{ dtd.drug.packages_per_prescription|frac2float }}</span>
         {% if dtd.weeks_per_prescription is number %}
             (<span class="weeks">{{ dtd.weeks_per_prescription }}</span>)
         {% endif %}
