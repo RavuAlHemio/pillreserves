@@ -194,6 +194,12 @@ form.replenish input[name=amount] { width: 3em; }
     th.replenish, td.replenish { display: none; }
     form { display: none; }
 }
+@media (screen and prefers-color-scheme: dark) {
+    body { background-color: black; color: #ccc; }
+    table, th, td { border: 1px solid #333; }
+    input[type=number] { background-color: black; color: #ccc; }
+    input[type=submit] { background-color: #555; color: #ccc; }
+}
 </style>
 </head>
 <body>
