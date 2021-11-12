@@ -2,6 +2,7 @@ mod model;
 mod util;
 
 
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::{Infallible, TryInto};
@@ -174,7 +175,7 @@ fn respond_405(allowed: &str) -> Result<Response<Body>, Infallible> {
     }
 }
 
-async fn handle_get(_request: Request<Body>) -> Result<Response<Body>, Infallible> {
+async fn handle_get(request: Request<Body>) -> Result<Response<Body>, Infallible> {
     let template = r#"<!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
@@ -206,29 +207,42 @@ form.replenish input[name=amount] { width: 3em; }
 <h1>Pill Reserves</h1>
 <table>
 <tr>
-    <th class="obverse-photo">Obverse</th>
-    <th class="reverse-photo">Reverse</th>
+    {% if mode != "docprint" %}
+        <th class="obverse-photo">Obverse</th>
+        <th class="reverse-photo">Reverse</th>
+    {% endif %}
+
     <th class="trade-name">Trade name</th>
     <th class="components">Components</th>
     <th class="description">Description</th>
-    <th class="remaining">Remaining</th>
-    <th class="prescription">Per prescription</th>
+
+    {% if mode != "docprint" %}
+        <th class="remaining">Remaining</th>
+        <th class="prescription">Per prescription</th>
+    {% endif %}
+
     <th class="dosage">Dosage</th>
-    <th class="replenish">Replenish</th>
+
+    {% if mode != "docprint" %}
+        <th class="replenish">Replenish</th>
+    {% endif %}
 </tr>
 {% for dtd in drugs_to_display %}
 {% if dtd.drug.show %}
 <tr>
-    <td class="obverse-photo">
-        {%- if dtd.drug.obverse_photo -%}
-            <img src="images/{{ dtd.drug.obverse_photo|urlencode_strict|escape }}" width="100" height="80" />
-        {%- endif -%}
-    </td>
-    <td class="reverse-photo">
-        {%- if dtd.drug.reverse_photo -%}
-            <img src="images/{{ dtd.drug.reverse_photo|urlencode_strict|escape }}" width="100" height="80" />
-        {%- endif -%}
-    </td>
+    {% if mode != "docprint" %}
+        <td class="obverse-photo">
+            {%- if dtd.drug.obverse_photo -%}
+                <img src="images/{{ dtd.drug.obverse_photo|urlencode_strict|escape }}" width="100" height="80" />
+            {%- endif -%}
+        </td>
+        <td class="reverse-photo">
+            {%- if dtd.drug.reverse_photo -%}
+                <img src="images/{{ dtd.drug.reverse_photo|urlencode_strict|escape }}" width="100" height="80" />
+            {%- endif -%}
+        </td>
+    {% endif %}
+
     <td class="trade-name">{{ dtd.drug.trade_name|escape }}</td>
     <td class="components">
         <ul>
@@ -242,20 +256,24 @@ form.replenish input[name=amount] { width: 3em; }
         </ul>
     </td>
     <td class="description">{{ dtd.drug.description|escape|br }}</td>
-    <td class="remaining">
-        <span class="total">{{ dtd.drug.remaining|frac2float }}</span>
-        {% if dtd.remaining_weeks is number %}
-            (<span class="weeks">{{ dtd.remaining_weeks }}</span>)
-        {% endif %}
-    </td>
-    <td class="prescription">
-        <span class="units-per-package">{{ dtd.drug.units_per_package|frac2float }}</span>
-        &#215;
-        <span class="packages-per-prescription">{{ dtd.drug.packages_per_prescription|frac2float }}</span>
-        {% if dtd.weeks_per_prescription is number %}
-            (<span class="weeks">{{ dtd.weeks_per_prescription }}</span>)
-        {% endif %}
-    </td>
+
+    {% if mode != "docprint" %}
+        <td class="remaining">
+            <span class="total">{{ dtd.drug.remaining|frac2float }}</span>
+            {% if dtd.remaining_weeks is number %}
+                (<span class="weeks">{{ dtd.remaining_weeks }}</span>)
+            {% endif %}
+        </td>
+        <td class="prescription">
+            <span class="units-per-package">{{ dtd.drug.units_per_package|frac2float }}</span>
+            &#215;
+            <span class="packages-per-prescription">{{ dtd.drug.packages_per_prescription|frac2float }}</span>
+            {% if dtd.weeks_per_prescription is number %}
+                (<span class="weeks">{{ dtd.weeks_per_prescription }}</span>)
+            {% endif %}
+        </td>
+    {% endif %}
+
     <td class="dosage">
         <span class="morning">{{ dtd.drug.dosage_morning|frac2str|escape }}</span>
         &#8210;
@@ -265,25 +283,30 @@ form.replenish input[name=amount] { width: 3em; }
         &#8210;
         <span class="night">{{ dtd.drug.dosage_night|frac2str|escape }}</span>
     </td>
-    <td class="replenish">
-        <form method="post" class="replenish">
-            <input type="hidden" name="do" value="replenish" />
-            <input type="hidden" name="drug-index" value="{{ dtd.index }}" />
-            <input type="number" name="amount" step="0.01" />
-            <input type="submit" value="Replenish" />
-        </form>
-    </td>
+
+    {% if mode != "docprint" %}
+        <td class="replenish">
+            <form method="post" class="replenish">
+                <input type="hidden" name="do" value="replenish" />
+                <input type="hidden" name="drug-index" value="{{ dtd.index }}" />
+                <input type="number" name="amount" step="0.01" />
+                <input type="submit" value="Replenish" />
+            </form>
+        </td>
+    {% endif %}
 </tr>
 {% endif %}
 {% endfor %}
 </table>
 
-<p>
-    <form method="post" class="take-week">
-        <input type="hidden" name="do" value="take-week" />
-        <input type="submit" value="Reduce by a week" />
-    </form>
-</p>
+{% if mode != "docprint" %}
+    <p>
+        <form method="post" class="take-week">
+            <input type="hidden" name="do" value="take-week" />
+            <input type="submit" value="Reduce by a week" />
+        </form>
+    </p>
+{% endif %}
 </body>
 </html>
 "#;
@@ -292,6 +315,16 @@ form.replenish input[name=amount] { width: 3em; }
         None => return respond_500(),
         Some(d) => d,
     };
+
+    let query_values: HashMap<Cow<str>, Cow<str>> = if let Some(query_str) = request.uri().query() {
+        form_urlencoded::parse(query_str.as_bytes())
+            .collect()
+    } else {
+        HashMap::new()
+    };
+    let mode = query_values
+        .get("mode")
+        .unwrap_or_else(|| &Cow::Borrowed(""));
 
     let data_to_show: Vec<DrugToDisplay> = data.iter()
         .enumerate()
@@ -325,6 +358,7 @@ form.replenish input[name=amount] { width: 3em; }
     tera.register_filter("frac2float", FracToFloat);
     let mut ctx = Context::new();
     ctx.insert("drugs_to_display", &data_to_show);
+    ctx.insert("mode", mode);
     let body_str = match tera.render_str(template, &ctx) {
         Ok(bs) => bs,
         Err(e) => {
