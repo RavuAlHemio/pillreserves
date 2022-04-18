@@ -207,99 +207,103 @@ form.replenish input[name=amount] { width: 3em; }
 <h1>Pill Reserves</h1>
 <table>
 <tr>
-    {% if mode != "docprint" %}
-        <th class="obverse-photo">Obverse</th>
-        <th class="reverse-photo">Reverse</th>
-    {% endif %}
-
-    <th class="trade-name">Trade name</th>
-    <th class="components">Components</th>
-    <th class="description">Description</th>
-
-    {% if mode != "docprint" %}
-        <th class="remaining">Remaining</th>
-        <th class="prescription">Per prescription</th>
-    {% endif %}
-
-    <th class="dosage">Dosage</th>
-
-    {% if mode != "docprint" %}
-        <th class="replenish">Replenish</th>
-    {% endif %}
+    {% for column in profile_columns -%}
+        {% if column == "obverse-photo" -%}
+            <th class="obverse-photo">Obverse</th>
+        {% elif column == "reverse-photo" -%}
+            <th class="reverse-photo">Reverse</th>
+        {% elif column == "trade-name" -%}
+            <th class="trade-name">Trade name</th>
+        {% elif column == "components" -%}
+            <th class="components">Components</th>
+        {% elif column == "description" -%}
+            <th class="description">Description</th>
+        {% elif column == "remaining" -%}
+            <th class="remaining">Remaining</th>
+        {% elif column == "prescription" -%}
+            <th class="prescription">Per prescription</th>
+        {% elif column == "dosage" -%}
+            <th class="dosage">Dosage</th>
+        {% elif column == "replenish" -%}
+            <th class="replenish">Replenish</th>
+        {% endif -%}
+    {% endfor -%}
 </tr>
-{% for dtd in drugs_to_display %}
-{% if dtd.drug.show %}
+{% for dtd in drugs_to_display -%}
+{% if dtd.drug.show -%}
 <tr>
-    {% if mode != "docprint" %}
-        <td class="obverse-photo">
-            {%- if dtd.drug.obverse_photo -%}
-                <img src="images/{{ dtd.drug.obverse_photo|urlencode_strict|escape }}" width="100" height="80" />
-            {%- endif -%}
-        </td>
-        <td class="reverse-photo">
-            {%- if dtd.drug.reverse_photo -%}
-                <img src="images/{{ dtd.drug.reverse_photo|urlencode_strict|escape }}" width="100" height="80" />
-            {%- endif -%}
-        </td>
-    {% endif %}
-
-    <td class="trade-name">{{ dtd.drug.trade_name|escape }}</td>
-    <td class="components">
-        <ul>
-        {% for component in dtd.drug.components %}
-            <li>
-                <span class="generic-name">{{ component.generic_name|escape }}</span>
-                <span class="amount">{{ component.amount|frac2float }}</span>
-                <span class="unit">{{ component.unit|escape }}</span>
-            </li>
-        {% endfor %}
-        </ul>
-    </td>
-    <td class="description">{{ dtd.drug.description|escape|br }}</td>
-
-    {% if mode != "docprint" %}
-        <td class="remaining">
-            <span class="total">{{ dtd.drug.remaining|frac2float }}</span>
-            {% if dtd.remaining_weeks is number %}
-                (<span class="weeks">{{ dtd.remaining_weeks }}</span>)
-            {% endif %}
-        </td>
-        <td class="prescription">
-            <span class="units-per-package">{{ dtd.drug.units_per_package|frac2float }}</span>
-            &#215;
-            <span class="packages-per-prescription">{{ dtd.drug.packages_per_prescription|frac2float }}</span>
-            {% if dtd.weeks_per_prescription is number %}
-                (<span class="weeks">{{ dtd.weeks_per_prescription }}</span>)
-            {% endif %}
-        </td>
-    {% endif %}
-
-    <td class="dosage">
-        <span class="morning">{{ dtd.drug.dosage_morning|frac2str|escape }}</span>
-        &#8210;
-        <span class="noon">{{ dtd.drug.dosage_noon|frac2str|escape }}</span>
-        &#8210;
-        <span class="evening">{{ dtd.drug.dosage_evening|frac2str|escape }}</span>
-        &#8210;
-        <span class="night">{{ dtd.drug.dosage_night|frac2str|escape }}</span>
-    </td>
-
-    {% if mode != "docprint" %}
-        <td class="replenish">
-            <form method="post" class="replenish">
-                <input type="hidden" name="do" value="replenish" />
-                <input type="hidden" name="drug-index" value="{{ dtd.index }}" />
-                <input type="number" name="amount" step="0.01" />
-                <input type="submit" value="Replenish" />
-            </form>
-        </td>
-    {% endif %}
+    {% for column in profile_columns -%}
+        {% if column == "obverse-photo" -%}
+            <td class="obverse-photo">
+                {%- if dtd.drug.obverse_photo -%}
+                    <img src="images/{{ dtd.drug.obverse_photo|urlencode_strict|escape }}" width="100" height="80" />
+                {%- endif -%}
+            </td>
+        {% elif column == "reverse-photo" -%}
+            <td class="reverse-photo">
+                {%- if dtd.drug.reverse_photo -%}
+                    <img src="images/{{ dtd.drug.reverse_photo|urlencode_strict|escape }}" width="100" height="80" />
+                {%- endif -%}
+            </td>
+        {% elif column == "trade-name" -%}
+            <td class="trade-name">{{ dtd.drug.trade_name|escape }}</td>
+        {% elif column == "components" -%}
+            <td class="components">
+                <ul>
+                {% for component in dtd.drug.components %}
+                    <li>
+                        <span class="generic-name">{{ component.generic_name|escape }}</span>
+                        <span class="amount">{{ component.amount|frac2float }}</span>
+                        <span class="unit">{{ component.unit|escape }}</span>
+                    </li>
+                {% endfor %}
+                </ul>
+            </td>
+        {% elif column == "description" -%}
+            <td class="description">{{ dtd.drug.description|escape|br }}</td>
+        {% elif column == "remaining" -%}
+            <td class="remaining">
+                <span class="total">{{ dtd.drug.remaining|frac2float }}</span>
+                {% if dtd.remaining_weeks is number %}
+                    (<span class="weeks">{{ dtd.remaining_weeks }}</span>)
+                {% endif %}
+            </td>
+        {% elif column == "prescription" -%}
+            <td class="prescription">
+                <span class="units-per-package">{{ dtd.drug.units_per_package|frac2float }}</span>
+                &#215;
+                <span class="packages-per-prescription">{{ dtd.drug.packages_per_prescription|frac2float }}</span>
+                {% if dtd.weeks_per_prescription is number %}
+                    (<span class="weeks">{{ dtd.weeks_per_prescription }}</span>)
+                {% endif %}
+            </td>
+        {% elif column == "dosage" -%}
+            <td class="dosage">
+                <span class="morning">{{ dtd.drug.dosage_morning|frac2str|escape }}</span>
+                &#8210;
+                <span class="noon">{{ dtd.drug.dosage_noon|frac2str|escape }}</span>
+                &#8210;
+                <span class="evening">{{ dtd.drug.dosage_evening|frac2str|escape }}</span>
+                &#8210;
+                <span class="night">{{ dtd.drug.dosage_night|frac2str|escape }}</span>
+            </td>
+        {% elif column == "replenish" -%}
+            <td class="replenish">
+                <form method="post" class="replenish">
+                    <input type="hidden" name="do" value="replenish" />
+                    <input type="hidden" name="drug-index" value="{{ dtd.index }}" />
+                    <input type="number" name="amount" step="0.01" />
+                    <input type="submit" value="Replenish" />
+                </form>
+            </td>
+        {% endif -%}
+    {% endfor -%}
 </tr>
 {% endif %}
 {% endfor %}
 </table>
 
-{% if mode != "docprint" %}
+{% if not hide_ui %}
     <p>
         <form method="post" class="take-week">
             <input type="hidden" name="do" value="take-week" />
@@ -322,9 +326,31 @@ form.replenish input[name=amount] { width: 3em; }
     } else {
         HashMap::new()
     };
-    let mode = query_values
-        .get("mode")
+    let column_profile = query_values
+        .get("columns")
         .unwrap_or_else(|| &Cow::Borrowed(""));
+    let hide_ui = query_values
+        .get("hide-ui")
+        .map(|s| s == "1")
+        .unwrap_or(false);
+
+    let actual_columns = {
+        let config_guard = CONFIG
+            .get().expect("CONFIG not set")
+            .read().await;
+        config_guard.column_profiles
+            .get(column_profile.as_ref())
+            .map(|cols| cols.clone())
+            .unwrap_or_else(||
+                [
+                    "obverse-photo", "reverse-photo", "trade-name", "components", "description",
+                    "remaining", "prescription", "dosage", "replenish",
+                ]
+                    .iter()
+                    .map(|s| (*s).to_owned())
+                    .collect()
+            )
+    };
 
     let data_to_show: Vec<DrugToDisplay> = data.iter()
         .enumerate()
@@ -358,7 +384,8 @@ form.replenish input[name=amount] { width: 3em; }
     tera.register_filter("frac2float", FracToFloat);
     let mut ctx = Context::new();
     ctx.insert("drugs_to_display", &data_to_show);
-    ctx.insert("mode", mode);
+    ctx.insert("profile_columns", &actual_columns);
+    ctx.insert("hide_ui", &hide_ui);
     let body_str = match tera.render_str(template, &ctx) {
         Ok(bs) => bs,
         Err(e) => {

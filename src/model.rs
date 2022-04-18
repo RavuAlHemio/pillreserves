@@ -1,15 +1,18 @@
+use std::collections::HashMap;
+
 use derive_new::new;
 use num_rational::Rational64;
 use num_traits::Zero;
 use serde::{Deserialize, Serialize};
 
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, new, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, new, PartialEq, Serialize)]
 pub(crate) struct Config {
     pub listen_addr: String,
     pub base_url: String,
     pub data_path: String,
     pub auth_tokens: Vec<String>,
+    pub column_profiles: HashMap<String, Vec<String>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, new, PartialEq, Serialize)]
