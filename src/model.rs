@@ -30,6 +30,7 @@ pub(crate) struct Drug {
     show: bool,
     obverse_photo: Option<String>,
     reverse_photo: Option<String>,
+    #[serde(default)] is_pill: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, new, PartialEq, Serialize)]
@@ -47,6 +48,14 @@ pub(crate) struct DrugToDisplay {
     pub weeks_per_prescription: Option<i64>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, Hash, new, PartialEq, Serialize)]
+pub(crate) struct DailyPills {
+    morning: u64,
+    noon: u64,
+    evening: u64,
+    night: u64,
+}
+
 
 impl Drug {
     pub fn trade_name(&self) -> &str { &self.trade_name }
@@ -62,6 +71,7 @@ impl Drug {
     pub fn show(&self) -> bool { self.show }
     pub fn obverse_photo(&self) -> Option<&str> { self.obverse_photo.as_ref().map(|s| s.as_str()) }
     pub fn reverse_photo(&self) -> Option<&str> { self.reverse_photo.as_ref().map(|s| s.as_str()) }
+    pub fn is_pill(&self) -> bool { self.is_pill }
 
     pub fn total_dosage_day(&self) -> Rational64 {
         self.dosage_morning + self.dosage_noon + self.dosage_evening + self.dosage_night
@@ -98,4 +108,35 @@ impl DrugToDisplay {
     pub fn drug(&self) -> &Drug { &self.drug }
     pub fn remaining_weeks(&self) -> Option<i64> { self.remaining_weeks }
     pub fn weeks_per_prescription(&self) -> Option<i64> { self.weeks_per_prescription }
+}
+
+impl DailyPills {
+    pub fn morning(&self) -> u64 { self.morning }
+    pub fn noon(&self) -> u64 { self.noon }
+    pub fn evening(&self) -> u64 { self.evening }
+    pub fn night(&self) -> u64 { self.night }
+
+    pub fn increase_morning(&mut self, by: &Rational64) {
+        if let Ok(numer) = u64::try_from(*by.ceil().numer()) {
+            self.morning += numer;
+        }
+    }
+
+    pub fn increase_noon(&mut self, by: &Rational64) {
+        if let Ok(numer) = u64::try_from(*by.ceil().numer()) {
+            self.noon += numer;
+        }
+    }
+
+    pub fn increase_evening(&mut self, by: &Rational64) {
+        if let Ok(numer) = u64::try_from(*by.ceil().numer()) {
+            self.evening += numer;
+        }
+    }
+
+    pub fn increase_night(&mut self, by: &Rational64) {
+        if let Ok(numer) = u64::try_from(*by.ceil().numer()) {
+            self.night += numer;
+        }
+    }
 }

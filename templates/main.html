@@ -125,6 +125,17 @@ form.replenish input[name=amount] { width: 3em; }
 {% endfor %}
 </table>
 
+<p>
+    Daily pill count:
+    <span class="morning">{{ pill_counts.morning() }}</span>
+    &#8210;
+    <span class="noon">{{ pill_counts.noon() }}</span>
+    &#8210;
+    <span class="evening">{{ pill_counts.evening() }}</span>
+    &#8210;
+    <span class="night">{{ pill_counts.night() }}</span>
+</p>
+
 {% if !hide_ui %}
     <p>
         <form method="post" class="take-week">

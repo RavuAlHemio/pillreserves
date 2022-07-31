@@ -30,7 +30,7 @@ use toml;
 use tracing::{debug, error};
 use url::Url;
 
-use crate::model::{Config, Drug, DrugToDisplay};
+use crate::model::{Config, DailyPills, Drug, DrugToDisplay};
 use crate::util::parse_decimal;
 
 
@@ -48,6 +48,7 @@ static IMAGE_PATH_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(
 struct MainTemplate<'a, 'b> {
     pub profile_columns: &'a Vec<String>,
     pub drugs_to_display: &'b Vec<DrugToDisplay>,
+    pub pill_counts: DailyPills,
     pub hide_ui: bool,
 }
 
@@ -247,9 +248,27 @@ async fn handle_get(request: Request<Body>) -> Result<Response<Body>, Infallible
         .filter(|dtd| dtd.drug().show())
         .collect();
 
+    let mut pill_counts = DailyPills::new(
+        0,
+        0,
+        0,
+        0,
+    );
+    for drug in &data_to_show {
+        if !drug.drug().is_pill() {
+            continue;
+        }
+
+        pill_counts.increase_morning(&drug.drug().dosage_morning());
+        pill_counts.increase_noon(&drug.drug().dosage_noon());
+        pill_counts.increase_evening(&drug.drug().dosage_evening());
+        pill_counts.increase_night(&drug.drug().dosage_night());
+    }
+
     let template = MainTemplate {
         drugs_to_display: &data_to_show,
         profile_columns: &actual_columns,
+        pill_counts,
         hide_ui,
     };
     let body_str = template.render()
