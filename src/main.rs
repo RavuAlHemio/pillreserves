@@ -44,7 +44,7 @@ static IMAGE_PATH_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(
 
 
 #[derive(Template)]
-#[template(path = "main.html")]
+#[template(path = "main.html", escape = "none")]
 struct MainTemplate<'a, 'b> {
     pub profile_columns: &'a Vec<String>,
     pub drugs_to_display: &'b Vec<DrugToDisplay>,
