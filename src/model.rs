@@ -41,10 +41,10 @@ pub(crate) struct DrugComponent {
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, new, PartialEq, Serialize)]
 pub(crate) struct DrugToDisplay {
-    index: usize,
-    drug: Drug,
-    remaining_weeks: Option<i64>,
-    weeks_per_prescription: Option<i64>,
+    pub index: usize,
+    pub drug: Drug,
+    pub remaining_weeks: Option<i64>,
+    pub weeks_per_prescription: Option<i64>,
 }
 
 

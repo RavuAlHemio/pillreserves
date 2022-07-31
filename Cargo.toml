@@ -1,23 +1,24 @@
 [package]
 name = "pillreserves"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
+askama = { version = "0.11" }
 chrono = { version = "0.4" }
 derive-new = { version = "0.5" }
-env_logger = { version = "0.8" }
 form_urlencoded = { version = "1.0" }
 http = { version = "0.2" }
 hyper = { version = "0.14", features = ["http1", "http2", "server", "tcp"] }
-log = { version = "0.4" }
 num-rational = { version = "0.4", features = ["serde"] }
 num-traits = { version = "0.2" }
-once_cell = { version = "1.8" }
-regex = { version = "1.5" }
+once_cell = { version = "1.13" }
+regex = { version = "1.6" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
-tera = { version = "1.12" }
-tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
+tracing = { version = "0.1" }
+tracing-appender = { version = "0.2" }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tokio = { version = "1.20", features = ["macros", "rt-multi-thread"] }
 toml = { version = "0.5" }
 url = { version = "2.2" }

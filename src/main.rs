@@ -1,3 +1,4 @@
+mod filters;
 mod model;
 mod util;
 
@@ -13,25 +14,24 @@ use std::io::{self, Read};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
+use askama::Template;
 use chrono::{DateTime, TimeZone, Utc};
-use env_logger;
 use form_urlencoded;
 use http::header::IF_MODIFIED_SINCE;
 use hyper::{Body, Method, Request, Response, Server};
 use hyper::service::{make_service_fn, service_fn};
-use log::error;
 use num_rational::Rational64;
 use num_traits::Zero;
 use once_cell::sync::{Lazy, OnceCell};
 use regex::Regex;
 use serde_json;
-use tera::{Context, Tera};
 use tokio::sync::RwLock;
 use toml;
+use tracing::{debug, error};
 use url::Url;
 
 use crate::model::{Config, Drug, DrugToDisplay};
-use crate::util::{BrFilter, FracToFloat, FracToStr, parse_decimal};
+use crate::util::parse_decimal;
 
 
 const HTTP_TIMESTAMP_FORMAT: &'static str = "%a, %d %b %Y %H:%M:%S GMT";
@@ -41,6 +41,15 @@ static CONFIG: OnceCell<RwLock<Config>> = OnceCell::new();
 static IMAGE_PATH_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(
     "^/images/(?P<filename>[A-Za-z0-9-_]+[.][A-Za-z0-9]+)$"
 ).expect("failed to compile regex"));
+
+
+#[derive(Template)]
+#[template(path = "main.html")]
+struct MainTemplate<'a, 'b> {
+    pub profile_columns: &'a Vec<String>,
+    pub drugs_to_display: &'b Vec<DrugToDisplay>,
+    pub hide_ui: bool,
+}
 
 
 async fn load_data() -> Option<Vec<Drug>> {
@@ -176,145 +185,6 @@ fn respond_405(allowed: &str) -> Result<Response<Body>, Infallible> {
 }
 
 async fn handle_get(request: Request<Body>) -> Result<Response<Body>, Infallible> {
-    let template = r#"<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-<meta charset="utf-8" />
-<title>Pill Reserves</title>
-<style type="text/css">
-body { font-family: sans-serif; }
-table, th, td { border: 1px solid #ccc; }
-th, td { padding: 0.2em 0.4em; vertical-align: top; }
-td.count { text-align: right; }
-td.components ul { margin-top: 0; margin-bottom: 0; padding-inline-start: 15px; }
-form.replenish input[name=amount] { width: 3em; }
-@media (color) {
-    th { background-color: #603; color: #fff; }
-}
-@media print {
-    th.replenish, td.replenish { display: none; }
-    form { display: none; }
-}
-@media screen and (prefers-color-scheme: dark) {
-    body { background-color: black; color: #ccc; }
-    table, th, td { border: 1px solid #333; }
-    input[type=number] { background-color: black; color: #ccc; }
-    input[type=submit] { background-color: #555; color: #ccc; }
-}
-</style>
-</head>
-<body>
-<h1>Pill Reserves</h1>
-<table>
-<tr>
-    {% for column in profile_columns -%}
-        {% if column == "obverse-photo" -%}
-            <th class="obverse-photo">Obverse</th>
-        {% elif column == "reverse-photo" -%}
-            <th class="reverse-photo">Reverse</th>
-        {% elif column == "trade-name" -%}
-            <th class="trade-name">Trade name</th>
-        {% elif column == "components" -%}
-            <th class="components">Components</th>
-        {% elif column == "description" -%}
-            <th class="description">Description</th>
-        {% elif column == "remaining" -%}
-            <th class="remaining">Remaining</th>
-        {% elif column == "prescription" -%}
-            <th class="prescription">Per prescription</th>
-        {% elif column == "dosage" -%}
-            <th class="dosage">Dosage</th>
-        {% elif column == "replenish" -%}
-            <th class="replenish">Replenish</th>
-        {% endif -%}
-    {% endfor -%}
-</tr>
-{% for dtd in drugs_to_display -%}
-{% if dtd.drug.show -%}
-<tr>
-    {% for column in profile_columns -%}
-        {% if column == "obverse-photo" -%}
-            <td class="obverse-photo">
-                {%- if dtd.drug.obverse_photo -%}
-                    <img src="images/{{ dtd.drug.obverse_photo|urlencode_strict|escape }}" width="100" height="80" />
-                {%- endif -%}
-            </td>
-        {% elif column == "reverse-photo" -%}
-            <td class="reverse-photo">
-                {%- if dtd.drug.reverse_photo -%}
-                    <img src="images/{{ dtd.drug.reverse_photo|urlencode_strict|escape }}" width="100" height="80" />
-                {%- endif -%}
-            </td>
-        {% elif column == "trade-name" -%}
-            <td class="trade-name">{{ dtd.drug.trade_name|escape }}</td>
-        {% elif column == "components" -%}
-            <td class="components">
-                <ul>
-                {% for component in dtd.drug.components %}
-                    <li>
-                        <span class="generic-name">{{ component.generic_name|escape }}</span>
-                        <span class="amount">{{ component.amount|frac2float }}</span>
-                        <span class="unit">{{ component.unit|escape }}</span>
-                    </li>
-                {% endfor %}
-                </ul>
-            </td>
-        {% elif column == "description" -%}
-            <td class="description">{{ dtd.drug.description|escape|br }}</td>
-        {% elif column == "remaining" -%}
-            <td class="remaining">
-                <span class="total">{{ dtd.drug.remaining|frac2float }}</span>
-                {% if dtd.remaining_weeks is number %}
-                    (<span class="weeks">{{ dtd.remaining_weeks }}</span>)
-                {% endif %}
-            </td>
-        {% elif column == "prescription" -%}
-            <td class="prescription">
-                <span class="units-per-package">{{ dtd.drug.units_per_package|frac2float }}</span>
-                &#215;
-                <span class="packages-per-prescription">{{ dtd.drug.packages_per_prescription|frac2float }}</span>
-                {% if dtd.weeks_per_prescription is number %}
-                    (<span class="weeks">{{ dtd.weeks_per_prescription }}</span>)
-                {% endif %}
-            </td>
-        {% elif column == "dosage" -%}
-            <td class="dosage">
-                <span class="morning">{{ dtd.drug.dosage_morning|frac2str|escape }}</span>
-                &#8210;
-                <span class="noon">{{ dtd.drug.dosage_noon|frac2str|escape }}</span>
-                &#8210;
-                <span class="evening">{{ dtd.drug.dosage_evening|frac2str|escape }}</span>
-                &#8210;
-                <span class="night">{{ dtd.drug.dosage_night|frac2str|escape }}</span>
-            </td>
-        {% elif column == "replenish" -%}
-            <td class="replenish">
-                <form method="post" class="replenish">
-                    <input type="hidden" name="do" value="replenish" />
-                    <input type="hidden" name="drug-index" value="{{ dtd.index }}" />
-                    <input type="number" name="amount" step="0.01" />
-                    <input type="submit" value="Replenish" />
-                </form>
-            </td>
-        {% endif -%}
-    {% endfor -%}
-</tr>
-{% endif %}
-{% endfor %}
-</table>
-
-{% if not hide_ui %}
-    <p>
-        <form method="post" class="take-week">
-            <input type="hidden" name="do" value="take-week" />
-            <input type="submit" value="Reduce by a week" />
-        </form>
-    </p>
-{% endif %}
-</body>
-</html>
-"#;
-
     let data = match load_data().await {
         None => return respond_500(),
         Some(d) => d,
@@ -377,22 +247,13 @@ form.replenish input[name=amount] { width: 3em; }
         .filter(|dtd| dtd.drug().show())
         .collect();
 
-    let mut tera: Tera = Default::default();
-    tera.autoescape_on(vec![]);
-    tera.register_filter("br", BrFilter);
-    tera.register_filter("frac2str", FracToStr);
-    tera.register_filter("frac2float", FracToFloat);
-    let mut ctx = Context::new();
-    ctx.insert("drugs_to_display", &data_to_show);
-    ctx.insert("profile_columns", &actual_columns);
-    ctx.insert("hide_ui", &hide_ui);
-    let body_str = match tera.render_str(template, &ctx) {
-        Ok(bs) => bs,
-        Err(e) => {
-            error!("error rendering template: {:?}", e);
-            return respond_500();
-        },
+    let template = MainTemplate {
+        drugs_to_display: &data_to_show,
+        profile_columns: &actual_columns,
+        hide_ui,
     };
+    let body_str = template.render()
+        .expect("failed to render template");
 
     let resp_body = Body::from(body_str);
     let resp_res = Response::builder()
@@ -516,7 +377,7 @@ async fn handle_post(request: Request<Body>) -> Result<Response<Body>, Infallibl
             return respond_500();
         },
     };
-    log::debug!("my_url: {}", my_url);
+    debug!("my_url: {}", my_url);
 
     let response_res = Response::builder()
         .status(302)
@@ -691,7 +552,14 @@ async fn perform() -> i32 {
         "config.toml".into()
     };
 
-    env_logger::init();
+    // set up tracing
+    let (stderr_non_blocking, _guard) = tracing_appender::non_blocking::NonBlockingBuilder::default()
+        .lossy(false)
+        .finish(std::io::stderr());
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_writer(stderr_non_blocking)
+        .init();
 
     // load config
     {

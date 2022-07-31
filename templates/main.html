@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta charset="utf-8" />
+<title>Pill Reserves</title>
+<style type="text/css">
+body { font-family: sans-serif; }
+table, th, td { border: 1px solid #ccc; }
+th, td { padding: 0.2em 0.4em; vertical-align: top; }
+td.count { text-align: right; }
+td.components ul { margin-top: 0; margin-bottom: 0; padding-inline-start: 15px; }
+form.replenish input[name=amount] { width: 3em; }
+@media (color) {
+    th { background-color: #603; color: #fff; }
+}
+@media print {
+    th.replenish, td.replenish { display: none; }
+    form { display: none; }
+}
+@media screen and (prefers-color-scheme: dark) {
+    body { background-color: black; color: #ccc; }
+    table, th, td { border: 1px solid #333; }
+    input[type=number] { background-color: black; color: #ccc; }
+    input[type=submit] { background-color: #555; color: #ccc; }
+}
+</style>
+</head>
+<body>
+<h1>Pill Reserves</h1>
+<table>
+<tr>
+    {% for column in profile_columns -%}
+        {% if column == "obverse-photo" -%}
+            <th class="obverse-photo">Obverse</th>
+        {% else if column == "reverse-photo" -%}
+            <th class="reverse-photo">Reverse</th>
+        {% else if column == "trade-name" -%}
+            <th class="trade-name">Trade name</th>
+        {% else if column == "components" -%}
+            <th class="components">Components</th>
+        {% else if column == "description" -%}
+            <th class="description">Description</th>
+        {% else if column == "remaining" -%}
+            <th class="remaining">Remaining</th>
+        {% else if column == "prescription" -%}
+            <th class="prescription">Per prescription</th>
+        {% else if column == "dosage" -%}
+            <th class="dosage">Dosage</th>
+        {% else if column == "replenish" -%}
+            <th class="replenish">Replenish</th>
+        {% endif -%}
+    {% endfor -%}
+</tr>
+{% for dtd in drugs_to_display -%}
+{% if dtd.drug.show() -%}
+<tr>
+    {% for column in profile_columns -%}
+        {% if column == "obverse-photo" -%}
+            <td class="obverse-photo">
+                {%- if let Some(obverse_photo) = dtd.drug.obverse_photo() -%}
+                    <img src="images/{{ obverse_photo|urlencode_strict|escape }}" width="100" height="80" />
+                {%- endif -%}
+            </td>
+        {% else if column == "reverse-photo" -%}
+            <td class="reverse-photo">
+                {%- if let Some(reverse_photo) = dtd.drug.reverse_photo() -%}
+                    <img src="images/{{ reverse_photo|urlencode_strict|escape }}" width="100" height="80" />
+                {%- endif -%}
+            </td>
+        {% else if column == "trade-name" -%}
+            <td class="trade-name">{{ dtd.drug.trade_name()|escape }}</td>
+        {% else if column == "components" -%}
+            <td class="components">
+                <ul>
+                {% for component in dtd.drug.components() %}
+                    <li>
+                        <span class="generic-name">{{ component.generic_name()|escape }}</span>
+                        <span class="amount">{{ component.amount()|frac2float }}</span>
+                        <span class="unit">{{ component.unit()|escape }}</span>
+                    </li>
+                {% endfor %}
+                </ul>
+            </td>
+        {% else if column == "description" -%}
+            <td class="description">{{ dtd.drug.description()|escape|br }}</td>
+        {% else if column == "remaining" -%}
+            <td class="remaining">
+                <span class="total">{{ dtd.drug.remaining()|frac2float }}</span>
+                {% if let Some(remaining_weeks) = dtd.remaining_weeks %}
+                    (<span class="weeks">{{ remaining_weeks }}</span>)
+                {% endif %}
+            </td>
+        {% else if column == "prescription" -%}
+            <td class="prescription">
+                <span class="units-per-package">{{ dtd.drug.units_per_package()|frac2float }}</span>
+                &#215;
+                <span class="packages-per-prescription">{{ dtd.drug.packages_per_prescription()|frac2float }}</span>
+                {% if let Some(weeks_per_prescription) = dtd.weeks_per_prescription() %}
+                    (<span class="weeks">{{ weeks_per_prescription }}</span>)
+                {% endif %}
+            </td>
+        {% else if column == "dosage" -%}
+            <td class="dosage">
+                <span class="morning">{{ dtd.drug.dosage_morning()|frac2str|escape }}</span>
+                &#8210;
+                <span class="noon">{{ dtd.drug.dosage_noon()|frac2str|escape }}</span>
+                &#8210;
+                <span class="evening">{{ dtd.drug.dosage_evening()|frac2str|escape }}</span>
+                &#8210;
+                <span class="night">{{ dtd.drug.dosage_night()|frac2str|escape }}</span>
+            </td>
+        {% else if column == "replenish" -%}
+            <td class="replenish">
+                <form method="post" class="replenish">
+                    <input type="hidden" name="do" value="replenish" />
+                    <input type="hidden" name="drug-index" value="{{ dtd.index }}" />
+                    <input type="number" name="amount" step="0.01" />
+                    <input type="submit" value="Replenish" />
+                </form>
+            </td>
+        {% endif -%}
+    {% endfor -%}
+</tr>
+{% endif %}
+{% endfor %}
+</table>
+
+{% if !hide_ui %}
+    <p>
+        <form method="post" class="take-week">
+            <input type="hidden" name="do" value="take-week" />
+            <input type="submit" value="Reduce by a week" />
+        </form>
+    </p>
+{% endif %}
+</body>
+</html>
