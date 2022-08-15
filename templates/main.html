@@ -9,6 +9,7 @@ table, th, td { border: 1px solid #ccc; }
 th, td { padding: 0.2em 0.4em; vertical-align: top; }
 td.count { text-align: right; }
 td.components ul { margin-top: 0; margin-bottom: 0; padding-inline-start: 15px; }
+td.remaining.replenish-me { background-color: #fcc; }
 form.replenish input[name=amount] { width: 3em; }
 @media (color) {
     th { background-color: #603; color: #fff; }
@@ -20,6 +21,7 @@ form.replenish input[name=amount] { width: 3em; }
 @media screen and (prefers-color-scheme: dark) {
     body { background-color: black; color: #ccc; }
     table, th, td { border: 1px solid #333; }
+    td.remaining.replenish-me { background-color: #400; }
     input[type=number] { background-color: black; color: #ccc; }
     input[type=submit] { background-color: #555; color: #ccc; }
 }
@@ -84,7 +86,7 @@ form.replenish input[name=amount] { width: 3em; }
         {% else if column == "description" -%}
             <td class="description">{{ dtd.drug.description()|escape|br }}</td>
         {% else if column == "remaining" -%}
-            <td class="remaining">
+            <td class="remaining{% if dtd.needs_replenishment(min_weeks_per_prescription) %} replenish-me{% endif %}">
                 <span class="total">{{ dtd.drug.remaining()|frac2float }}</span>
                 {% if let Some(remaining_weeks) = dtd.remaining_weeks %}
                     (<span class="weeks">{{ remaining_weeks }}</span>)

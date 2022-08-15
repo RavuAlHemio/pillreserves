@@ -48,6 +48,7 @@ static IMAGE_PATH_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(
 struct MainTemplate<'a, 'b> {
     pub profile_columns: &'a Vec<String>,
     pub drugs_to_display: &'b Vec<DrugToDisplay>,
+    pub min_weeks_per_prescription: Option<i64>,
     pub pill_counts: DailyPills,
     pub hide_ui: bool,
 }
@@ -248,6 +249,11 @@ async fn handle_get(request: Request<Body>) -> Result<Response<Body>, Infallible
         .filter(|dtd| dtd.drug().show())
         .collect();
 
+    let min_weeks_per_prescription = data_to_show.iter()
+        .filter(|dtd| dtd.drug().in_replenishment_cycle())
+        .filter_map(|dtd| dtd.weeks_per_prescription())
+        .min();
+
     let mut pill_counts = DailyPills::new(
         0,
         0,
@@ -268,6 +274,7 @@ async fn handle_get(request: Request<Body>) -> Result<Response<Body>, Infallible
     let template = MainTemplate {
         drugs_to_display: &data_to_show,
         profile_columns: &actual_columns,
+        min_weeks_per_prescription,
         pill_counts,
         hide_ui,
     };

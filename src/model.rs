@@ -31,6 +31,7 @@ pub(crate) struct Drug {
     obverse_photo: Option<String>,
     reverse_photo: Option<String>,
     #[serde(default)] is_pill: bool,
+    #[serde(default = "Drug::default_in_replenishment_cycle")] in_replenishment_cycle: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, new, PartialEq, Serialize)]
@@ -72,6 +73,7 @@ impl Drug {
     pub fn obverse_photo(&self) -> Option<&str> { self.obverse_photo.as_ref().map(|s| s.as_str()) }
     pub fn reverse_photo(&self) -> Option<&str> { self.reverse_photo.as_ref().map(|s| s.as_str()) }
     pub fn is_pill(&self) -> bool { self.is_pill }
+    pub fn in_replenishment_cycle(&self) -> bool { self.in_replenishment_cycle }
 
     pub fn total_dosage_day(&self) -> Rational64 {
         self.dosage_morning + self.dosage_noon + self.dosage_evening + self.dosage_night
@@ -95,6 +97,8 @@ impl Drug {
         assert!(addend > &zero);
         self.remaining = self.remaining + *addend;
     }
+
+    pub fn default_in_replenishment_cycle() -> bool { true }
 }
 
 impl DrugComponent {
@@ -108,6 +112,18 @@ impl DrugToDisplay {
     pub fn drug(&self) -> &Drug { &self.drug }
     pub fn remaining_weeks(&self) -> Option<i64> { self.remaining_weeks }
     pub fn weeks_per_prescription(&self) -> Option<i64> { self.weeks_per_prescription }
+
+    pub fn needs_replenishment(&self, min_weeks_per_prescription: &Option<i64>) -> bool {
+        let mwpp = match min_weeks_per_prescription {
+            Some(m) => *m,
+            None => return false,
+        };
+        let rw = match self.remaining_weeks() {
+            Some(w) => w,
+            None => return false,
+        };
+        rw < mwpp
+    }
 }
 
 impl DailyPills {
