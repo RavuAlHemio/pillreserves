@@ -354,9 +354,18 @@ async fn handle_post(request: Request<Body>) -> Result<Response<Body>, Infallibl
                 },
             }
         },
-        "take-week" => {
+        "take-days" => {
+            let days_str = match opts.get("days") {
+                Some(s) => s,
+                None => return respond_400("missing value for \"days\""),
+            };
+            let days: i64 = match days_str.parse() {
+                Ok(i) if i > 0 => i,
+                Ok(_) => return respond_400("invalid value for \"days\""),
+                Err(_) => return respond_400("invalid value for \"days\""),
+            };
             for drug in &mut data {
-                let week_dose = drug.total_dosage_day() * Rational64::new(7, 1);
+                let week_dose = drug.total_dosage_day() * Rational64::new(days, 1);
                 if week_dose > Zero::zero() {
                     drug.reduce(&week_dose);
                 }

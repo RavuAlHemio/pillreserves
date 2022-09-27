@@ -140,9 +140,14 @@ form.replenish input[name=amount] { width: 3em; }
 
 {% if !hide_ui %}
     <p>
-        <form method="post" class="take-week">
-            <input type="hidden" name="do" value="take-week" />
-            <input type="submit" value="Reduce by a week" />
+        <form method="post" class="take-days">
+            <input type="hidden" name="do" value="take-days" />
+            <label>
+                Reduce by
+                <input name="days" type="number" min="1" step="1" value="7" />
+                days
+            </label>
+            <input type="submit" value="Reduce" />
         </form>
     </p>
 {% endif %}
