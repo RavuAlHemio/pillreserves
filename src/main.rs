@@ -15,7 +15,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 
 use askama::Template;
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use form_urlencoded;
 use http::header::IF_MODIFIED_SINCE;
 use hyper::{Body, Method, Request, Response, Server};
@@ -453,11 +453,13 @@ async fn handle_get_image(request: Request<Body>) -> Result<Response<Body>, Infa
 
     if let Some(ims) = request.headers().get(IF_MODIFIED_SINCE) {
         if let Ok(ims_str) = ims.to_str() {
-            if let Ok(timestamp) = Utc.datetime_from_str(ims_str, HTTP_TIMESTAMP_FORMAT) {
-                if let Ok(modified) = file_meta.modified() {
-                    let modified_timestamp: DateTime<Utc> = modified.into();
-                    if modified_timestamp <= timestamp {
-                        return respond_304();
+            if let Ok(naive_timestamp) = NaiveDateTime::parse_from_str(ims_str, HTTP_TIMESTAMP_FORMAT) {
+                if let Some(timestamp) = naive_timestamp.and_local_timezone(Utc).single() {
+                    if let Ok(modified) = file_meta.modified() {
+                        let modified_timestamp: DateTime<Utc> = modified.into();
+                        if modified_timestamp <= timestamp {
+                            return respond_304();
+                        }
                     }
                 }
             }

@@ -108,7 +108,7 @@ impl DrugComponent {
 }
 
 impl DrugToDisplay {
-    pub fn index(&self) -> usize { self.index }
+    #[allow(unused)] pub fn index(&self) -> usize { self.index }
     pub fn drug(&self) -> &Drug { &self.drug }
     pub fn remaining_weeks(&self) -> Option<i64> { self.remaining_weeks }
     pub fn weeks_per_prescription(&self) -> Option<i64> { self.weeks_per_prescription }
