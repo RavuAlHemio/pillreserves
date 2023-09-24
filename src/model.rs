@@ -57,6 +57,13 @@ pub(crate) struct DailyPills {
     night: u64,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, Hash, new, PartialEq, Serialize)]
+pub(crate) enum ReplenishmentStatus {
+    DoNot,
+    Can,
+    Should,
+}
+
 
 impl Drug {
     pub fn trade_name(&self) -> &str { &self.trade_name }
@@ -113,16 +120,22 @@ impl DrugToDisplay {
     pub fn remaining_weeks(&self) -> Option<i64> { self.remaining_weeks }
     pub fn weeks_per_prescription(&self) -> Option<i64> { self.weeks_per_prescription }
 
-    pub fn needs_replenishment(&self, min_weeks_per_prescription: &Option<i64>) -> bool {
+    pub fn needs_replenishment(&self, min_weeks_per_prescription: &Option<i64>) -> ReplenishmentStatus {
         let mwpp = match min_weeks_per_prescription {
             Some(m) => *m,
-            None => return false,
+            None => return ReplenishmentStatus::DoNot,
         };
         let rw = match self.remaining_weeks() {
             Some(w) => w,
-            None => return false,
+            None => return ReplenishmentStatus::DoNot,
         };
-        rw < mwpp
+        if rw < 3 {
+            ReplenishmentStatus::Should
+        } else if rw < mwpp {
+            ReplenishmentStatus::Can
+        } else {
+            ReplenishmentStatus::DoNot
+        }
     }
 }
 
@@ -153,6 +166,16 @@ impl DailyPills {
     pub fn increase_night(&mut self, by: &Rational64) {
         if let Ok(numer) = u64::try_from(*by.ceil().numer()) {
             self.night += numer;
+        }
+    }
+}
+
+impl ReplenishmentStatus {
+    pub fn css_classes(&self) -> &'static str {
+        match self {
+            Self::DoNot => "do-not-replenish",
+            Self::Can => "replenish-me replenish-soon",
+            Self::Should => "replenish-me replenish-now",
         }
     }
 }
