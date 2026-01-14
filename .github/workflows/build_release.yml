@@ -12,7 +12,7 @@ jobs:
       - name: trust repo directory
         run: git config --global --add safe.directory /__w/pillreserves/pillreserves
       - name: check out repository code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v6
       - name: fetch dependencies
         run: sh ./cicd/cargo_fetch.sh
       - name: run release build
@@ -20,7 +20,7 @@ jobs:
       - name: run release tests
         run: cargo test --release
       - name: upload release binary
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v6
         with:
           name: pillreserves-release
           path: target/release/pillreserves
