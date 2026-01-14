@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use derive_new::new;
 use num_rational::Rational64;
@@ -6,16 +6,16 @@ use num_traits::Zero;
 use serde::{Deserialize, Serialize};
 
 
-#[derive(Clone, Debug, Deserialize, Eq, new, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, new, Ord, PartialEq, PartialOrd, Serialize)]
 pub(crate) struct Config {
     pub listen_addr: String,
     pub base_url: String,
     pub data_path: String,
     pub auth_tokens: Vec<String>,
-    pub column_profiles: HashMap<String, Vec<String>>,
+    pub column_profiles: BTreeMap<String, Vec<String>>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, new, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, new, Ord, PartialEq, PartialOrd, Serialize)]
 pub(crate) struct Drug {
     trade_name: String,
     components: Vec<DrugComponent>,
@@ -34,14 +34,14 @@ pub(crate) struct Drug {
     #[serde(default = "Drug::default_in_replenishment_cycle")] in_replenishment_cycle: bool,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, new, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, new, Ord, PartialEq, PartialOrd, Serialize)]
 pub(crate) struct DrugComponent {
     generic_name: String,
     amount: Rational64,
     unit: String,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, new, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, new, Ord, PartialEq, PartialOrd, Serialize)]
 pub(crate) struct DrugToDisplay {
     pub index: usize,
     pub drug: Drug,
@@ -49,7 +49,7 @@ pub(crate) struct DrugToDisplay {
     pub weeks_per_prescription: Option<i64>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, new, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, new, Ord, PartialEq, PartialOrd, Serialize)]
 pub(crate) struct DailyPills {
     morning: u64,
     noon: u64,
@@ -57,7 +57,7 @@ pub(crate) struct DailyPills {
     night: u64,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, new, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, new, Ord, PartialEq, PartialOrd, Serialize)]
 pub(crate) enum ReplenishmentStatus {
     DoNot,
     Can,

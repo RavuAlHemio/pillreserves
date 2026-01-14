@@ -13,18 +13,23 @@ use std::fs::{self, File};
 use std::io::{self, Read};
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::{LazyLock, OnceLock};
 
 use askama::Template;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use form_urlencoded;
 use http::header::IF_MODIFIED_SINCE;
-use hyper::{Body, Method, Request, Response, Server};
-use hyper::service::{make_service_fn, service_fn};
+use http_body_util::{BodyExt, Full};
+use hyper::{Method, Request, Response};
+use hyper::body::{Bytes, Incoming};
+use hyper::service::service_fn;
+use hyper_util::rt::{TokioExecutor, TokioIo};
+use hyper_util::server::conn::auto::Builder;
 use num_rational::Rational64;
 use num_traits::Zero;
-use once_cell::sync::{Lazy, OnceCell};
 use regex::Regex;
 use serde_json;
+use tokio::net::TcpListener;
 use tokio::sync::RwLock;
 use toml;
 use tracing::{debug, error};
@@ -37,8 +42,8 @@ use crate::util::parse_decimal;
 const HTTP_TIMESTAMP_FORMAT: &'static str = "%a, %d %b %Y %H:%M:%S GMT";
 
 
-static CONFIG: OnceCell<RwLock<Config>> = OnceCell::new();
-static IMAGE_PATH_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(
+static CONFIG: OnceLock<RwLock<Config>> = OnceLock::new();
+static IMAGE_PATH_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(
     "^/images/(?P<filename>[A-Za-z0-9-_]+[.][A-Za-z0-9]+)$"
 ).expect("failed to compile regex"));
 
@@ -102,8 +107,8 @@ async fn store_data(data: &[Drug]) -> bool {
     }
 }
 
-fn respond_500() -> Result<Response<Body>, Infallible> {
-    let resp_body = Body::from("500 Something Went Wrong On The Server");
+fn respond_500() -> Result<Response<Full<Bytes>>, Infallible> {
+    let resp_body = Full::from("500 Something Went Wrong On The Server");
     let resp = Response::builder()
         .status(500)
         .header("Content-Type", "text/plain; charset=utf-8")
@@ -112,10 +117,10 @@ fn respond_500() -> Result<Response<Body>, Infallible> {
     Ok(resp)
 }
 
-fn respond_304() -> Result<Response<Body>, Infallible> {
+fn respond_304() -> Result<Response<Full<Bytes>>, Infallible> {
     let resp_res = Response::builder()
         .status(304)
-        .body(Body::empty());
+        .body(Full::new(Bytes::new()));
     match resp_res {
         Ok(resp) => Ok(resp),
         Err(e) => {
@@ -125,8 +130,8 @@ fn respond_304() -> Result<Response<Body>, Infallible> {
     }
 }
 
-fn respond_400(message: &str) -> Result<Response<Body>, Infallible> {
-    let resp_body = Body::from(format!("400 Bad Request: {}", message));
+fn respond_400(message: &str) -> Result<Response<Full<Bytes>>, Infallible> {
+    let resp_body = Full::from(format!("400 Bad Request: {}", message));
     let resp_res = Response::builder()
         .status(400)
         .header("Content-Type", "text/plain; charset=utf-8")
@@ -140,8 +145,8 @@ fn respond_400(message: &str) -> Result<Response<Body>, Infallible> {
     }
 }
 
-fn respond_403() -> Result<Response<Body>, Infallible> {
-    let resp_body = Body::from("403 Forbidden; token missing or invalid");
+fn respond_403() -> Result<Response<Full<Bytes>>, Infallible> {
+    let resp_body = Full::from("403 Forbidden; token missing or invalid");
     let resp_res = Response::builder()
         .status(403)
         .header("Content-Type", "text/plain; charset=utf-8")
@@ -155,8 +160,8 @@ fn respond_403() -> Result<Response<Body>, Infallible> {
     }
 }
 
-fn respond_404() -> Result<Response<Body>, Infallible> {
-    let resp_body = Body::from("404 Not Found; where the h*ck is it?");
+fn respond_404() -> Result<Response<Full<Bytes>>, Infallible> {
+    let resp_body = Full::from("404 Not Found; where the h*ck is it?");
     let resp_res = Response::builder()
         .status(404)
         .header("Content-Type", "text/plain; charset=utf-8")
@@ -170,8 +175,8 @@ fn respond_404() -> Result<Response<Body>, Infallible> {
     }
 }
 
-fn respond_405(allowed: &str) -> Result<Response<Body>, Infallible> {
-    let resp_body = Body::from(format!("405 Wrong Method; try one of: {}", allowed));
+fn respond_405(allowed: &str) -> Result<Response<Full<Bytes>>, Infallible> {
+    let resp_body = Full::from(format!("405 Wrong Method; try one of: {}", allowed));
     let resp_res = Response::builder()
         .status(405)
         .header("Content-Type", "text/plain; charset=utf-8")
@@ -186,7 +191,7 @@ fn respond_405(allowed: &str) -> Result<Response<Body>, Infallible> {
     }
 }
 
-async fn handle_get(request: Request<Body>) -> Result<Response<Body>, Infallible> {
+async fn handle_get(request: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
     let data = match load_data().await {
         None => return respond_500(),
         Some(d) => d,
@@ -281,7 +286,7 @@ async fn handle_get(request: Request<Body>) -> Result<Response<Body>, Infallible
     let body_str = template.render()
         .expect("failed to render template");
 
-    let resp_body = Body::from(body_str);
+    let resp_body = Full::from(body_str);
     let resp_res = Response::builder()
         .header("Content-Type", "text/html; charset=utf-8")
         .body(resp_body);
@@ -294,10 +299,10 @@ async fn handle_get(request: Request<Body>) -> Result<Response<Body>, Infallible
     }
 }
 
-async fn handle_post(request: Request<Body>) -> Result<Response<Body>, Infallible> {
+async fn handle_post(request: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
     let (head, body) = request.into_parts();
-    let body_bytes = match hyper::body::to_bytes(body).await {
-        Ok(bb) => bb,
+    let body_bytes = match body.collect().await {
+        Ok(bb) => bb.to_bytes(),
         Err(e) => {
             error!("failed to read request body: {}", e);
             return respond_500();
@@ -417,7 +422,7 @@ async fn handle_post(request: Request<Body>) -> Result<Response<Body>, Infallibl
     let response_res = Response::builder()
         .status(302)
         .header("Location", my_url.to_string())
-        .body(Body::from(""));
+        .body(Full::from(""));
     match response_res {
         Ok(r) => Ok(r),
         Err(e) => {
@@ -427,7 +432,7 @@ async fn handle_post(request: Request<Body>) -> Result<Response<Body>, Infallibl
     }
 }
 
-async fn handle_get_image(request: Request<Body>) -> Result<Response<Body>, Infallible> {
+async fn handle_get_image(request: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
     let path_caps = match IMAGE_PATH_REGEX.captures(request.uri().path()) {
         Some(pc) => pc,
         None => return respond_404(),
@@ -508,7 +513,7 @@ async fn handle_get_image(request: Request<Body>) -> Result<Response<Body>, Infa
     };
 
     let resp_len = file_bytes.len();
-    let resp_body = Body::from(file_bytes);
+    let resp_body = Full::from(file_bytes);
     let mut resp_builder = Response::builder()
         .header("Content-Type", content_type)
         .header("Content-Length", resp_len.to_string());
@@ -526,7 +531,7 @@ async fn handle_get_image(request: Request<Body>) -> Result<Response<Body>, Infa
     }
 }
 
-async fn handle_request(request: Request<Body>) -> Result<Response<Body>, Infallible> {
+async fn handle_request(request: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
     let uri_path = request.uri().path();
 
     // unauthenticated endpoints first
@@ -639,15 +644,34 @@ async fn perform() -> i32 {
         }
     };
 
-    let make_service = make_service_fn(|_conn| async {
-        Ok::<_, Infallible>(service_fn(handle_request))
-    });
-    let server = Server::bind(&addr).serve(make_service);
-    if let Err(e) = server.await {
-        error!("server error: {}", e);
-    }
+    let listener = match TcpListener::bind(addr).await {
+        Ok(l) => l,
+        Err(e) => {
+            error!("failed to bind to address and port {:?}: {}", addr, e);
+            return 1;
+        },
+    };
 
-    0
+    loop {
+        let (stream, remote_addr) = match listener.accept().await {
+            Ok(s_ra) => s_ra,
+            Err(e) => {
+                error!("failed to accept connection: {}", e);
+                return 1;
+            }
+        };
+        let io = TokioIo::new(stream);
+        tokio::task::spawn(async move {
+            let result = Builder::new(TokioExecutor::new())
+                .http1()
+                .http2()
+                .serve_connection(io, service_fn(handle_request))
+                .await;
+            if let Err(e) = result {
+                error!("error handling connection from {:?}: {}", remote_addr, e);
+            }
+        });
+    }
 }
 
 
