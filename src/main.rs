@@ -35,7 +35,7 @@ use toml;
 use tracing::{debug, error};
 use url::Url;
 
-use crate::model::{Config, DailyPills, Drug, DrugToDisplay};
+use crate::model::{AuthTokenConfig, Config, DailyPills, Drug, DrugToDisplay};
 use crate::util::parse_decimal;
 
 
@@ -105,6 +105,15 @@ async fn store_data(data: &[Drug]) -> bool {
             false
         },
     }
+}
+
+async fn verify_token(token_value: &str) -> Option<AuthTokenConfig> {
+    let config_guard = CONFIG
+        .get().expect("config is not set")
+        .read().await;
+    config_guard.auth_tokens
+        .get(token_value)
+        .map(|atc| atc.clone())
 }
 
 fn respond_500() -> Result<Response<Full<Bytes>>, Infallible> {
@@ -191,7 +200,7 @@ fn respond_405(allowed: &str) -> Result<Response<Full<Bytes>>, Infallible> {
     }
 }
 
-async fn handle_get(request: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
+async fn handle_get(request: Request<Incoming>, token_permissions: &AuthTokenConfig) -> Result<Response<Full<Bytes>>, Infallible> {
     let data = match load_data().await {
         None => return respond_500(),
         Some(d) => d,
@@ -206,10 +215,20 @@ async fn handle_get(request: Request<Incoming>) -> Result<Response<Full<Bytes>>,
     let column_profile = query_values
         .get("columns")
         .unwrap_or_else(|| &Cow::Borrowed(""));
-    let hide_ui = query_values
-        .get("hide-ui")
-        .map(|s| s == "1")
-        .unwrap_or(false);
+    if token_permissions.limited_column_profiles.len() > 0 {
+        if !token_permissions.limited_column_profiles.contains(&**column_profile) {
+            return respond_400("this is not a valid column profile for your token");
+        }
+    }
+    let hide_ui = if !token_permissions.allow_write {
+        true
+    } else {
+        // let read-write clients express a preference
+        query_values
+            .get("hide-ui")
+            .map(|s| s == "1")
+            .unwrap_or(false)
+    };
 
     let actual_columns = {
         let config_guard = CONFIG
@@ -299,7 +318,9 @@ async fn handle_get(request: Request<Incoming>) -> Result<Response<Full<Bytes>>,
     }
 }
 
-async fn handle_post(request: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
+async fn handle_post(request: Request<Incoming>, token_permissions: &AuthTokenConfig) -> Result<Response<Full<Bytes>>, Infallible> {
+    assert!(token_permissions.allow_write);
+
     let (head, body) = request.into_parts();
     let body_bytes = match body.collect().await {
         Ok(bb) => bb.to_bytes(),
@@ -558,24 +579,21 @@ async fn handle_request(request: Request<Incoming>) -> Result<Response<Full<Byte
         Some(tv) => tv,
     };
 
-    let token_matches = {
-        CONFIG
-            .get().expect("config is not set")
-            .read().await
-            .auth_tokens
-            .iter()
-            .any(|t| t == token_value)
+    let token_permissions = match verify_token(token_value).await {
+        Some(cp) => cp,
+        None => return respond_403(),
     };
-    if !token_matches {
-        return respond_403();
-    }
 
     // authenticated-only endpoints beyond this line
 
     if request.method() == Method::GET {
-        handle_get(request).await
+        handle_get(request, &token_permissions).await
     } else if request.method() == Method::POST {
-        handle_post(request).await
+        if token_permissions.allow_write {
+            handle_post(request, &token_permissions).await
+        } else {
+            respond_403()
+        }
     } else {
         respond_405("GET, POST")
     }

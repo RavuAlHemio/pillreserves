@@ -11,8 +11,14 @@ pub(crate) struct Config {
     pub listen_addr: String,
     pub base_url: String,
     pub data_path: String,
-    pub auth_tokens: Vec<String>,
+    pub auth_tokens: BTreeMap<String, AuthTokenConfig>,
     pub column_profiles: BTreeMap<String, Vec<String>>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, new, Ord, PartialEq, PartialOrd, Serialize)]
+pub(crate) struct AuthTokenConfig {
+    #[serde(default)] pub allow_write: bool,
+    #[serde(default)] pub limited_column_profiles: BTreeSet<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, new, Ord, PartialEq, PartialOrd, Serialize)]
