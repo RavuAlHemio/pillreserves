@@ -80,6 +80,14 @@ impl Drug {
     pub fn dosage_noon(&self) -> Rational64 { self.dosage_noon }
     pub fn dosage_evening(&self) -> Rational64 { self.dosage_evening }
     pub fn dosage_night(&self) -> Rational64 { self.dosage_night }
+    pub fn dosages(&self) -> [Rational64; 4] {
+        [
+            self.dosage_morning,
+            self.dosage_noon,
+            self.dosage_evening,
+            self.dosage_night,
+        ]
+    }
     pub fn units_per_package(&self) -> Rational64 { self.units_per_package }
     pub fn packages_per_prescription(&self) -> Rational64 { self.packages_per_prescription }
     pub fn show(&self) -> bool { self.show }

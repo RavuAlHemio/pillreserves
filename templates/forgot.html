@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}I Forgot &mdash; Pill Reserves{% endblock %}
+
+{% block body %}
+<h1>Pill Reserves</h1>
+<h2>I Forgot</h2>
+
+<form method="post" class="i-forgot">
+    <input type="hidden" name="do" value="i-forgot-update-inventory" />
+    <p>
+        <table>
+            <tr>
+                <th>time</th>
+                <td>morning</td>
+                <td>noon</td>
+                <td>evening</td>
+                <td>night</td>
+            </tr>
+            <tr>
+                <th>days forgotten</th>
+                <td><input name="morning" type="number" min="0" step="1" value="0" /></td>
+                <td><input name="noon" type="number" min="0" step="1" value="0" /></td>
+                <td><input name="evening" type="number" min="0" step="1" value="0" /></td>
+                <td><input name="night" type="number" min="0" step="1" value="0" /></td>
+            </tr>
+        </table>
+    </p>
+    <p>
+        <input type="submit" value="update inventory" />
+    </p>
+</form>
+
+{% endblock %}

@@ -58,6 +58,10 @@ struct MainTemplate<'a, 'b> {
     pub hide_ui: bool,
 }
 
+#[derive(Template)]
+#[template(path = "forgot.html", escape = "none")]
+struct ForgotTemplate;
+
 
 async fn load_data() -> Option<Vec<Drug>> {
     let data_path = {
@@ -195,6 +199,135 @@ fn respond_405(allowed: &str) -> Result<Response<Full<Bytes>>, Infallible> {
         Ok(resp) => Ok(resp),
         Err(e) => {
             error!("failed to assemble 405 response body: {}", e);
+            return respond_500();
+        },
+    }
+}
+
+async fn handle_get_forgot(_request: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
+    let template = ForgotTemplate;
+    let body_str = template.render()
+        .expect("failed to render template");
+
+    let resp_body = Full::from(body_str);
+    let resp_res = Response::builder()
+        .header("Content-Type", "text/html; charset=utf-8")
+        .body(resp_body);
+    match resp_res {
+        Ok(r) => Ok(r),
+        Err(e) => {
+            error!("failed to assemble response body: {}", e);
+            return respond_500();
+        },
+    }
+}
+
+async fn handle_post_forgot(request: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
+    let (head, body) = request.into_parts();
+    let body_bytes = match body.collect().await {
+        Ok(bb) => bb.to_bytes(),
+        Err(e) => {
+            error!("failed to read request body: {}", e);
+            return respond_500();
+        },
+    };
+    let body_vec = body_bytes.to_vec();
+
+    let opts: HashMap<String, String> = form_urlencoded::parse(&body_vec)
+        .map(|(k, v)| (k.as_ref().to_owned(), v.as_ref().to_owned()))
+        .collect();
+
+    let do_val = match opts.get("do") {
+        Some(dv) => dv,
+        None => return respond_400("missing value for \"do\""),
+    };
+    if do_val != "i-forgot-update-inventory" {
+        return respond_400("unknown value for \"do\"");
+    }
+
+    let mut data = match load_data().await {
+        None => return respond_500(),
+        Some(d) => d,
+    };
+
+    let mut adjustments = [0i64; 4];
+    const DAYTIMES: [&str; 4] = [
+        "morning",
+        "noon",
+        "evening",
+        "night",
+    ];
+    for (key, adjust) in DAYTIMES.iter().zip(adjustments.iter_mut()) {
+        let adjust_str = match opts.get(*key) {
+            Some(s) => s,
+            None => return respond_400(&format!("missing value for {:?}", key)),
+        };
+        *adjust = match adjust_str.parse() {
+            Ok(a) => a,
+            Err(_) => return respond_400(&format!("invalid value for {:?}", key)),
+        };
+    }
+
+    for drug in &mut data {
+        if !drug.show() {
+            continue;
+        }
+
+        for (dosage, adjust) in drug.dosages().iter().zip(adjustments.iter()) {
+            let product = *dosage * *adjust;
+            if *product.numer() > 0 {
+                drug.replenish(&product);
+            } else if *product.numer() < 0 {
+                let negative_product = -product;
+                drug.reduce(&negative_product);
+            }
+        }
+    }
+
+    // write updated data
+    if !store_data(&data).await {
+        return respond_500();
+    }
+
+    // redirect to main page
+    let base_url_string = {
+        let config_guard = CONFIG
+            .get().expect("config is not set")
+            .read().await;
+        config_guard.base_url.clone()
+    };
+    let base_url: Url = match base_url_string.parse() {
+        Ok(bu) => bu,
+        Err(e) => {
+            error!("failed to parse base URL {:?}: {}", base_url_string, e);
+            return respond_500();
+        },
+    };
+
+    let query = match head.uri.query() {
+        Some(q) => q,
+        None => {
+            error!("failed to obtain path and query from request URL");
+            return respond_500();
+        },
+    };
+    let my_url = match base_url.join(&format!("?{}", query)) {
+        Ok(u) => u,
+        Err(e) => {
+            error!("failed to join path and query: {}", e);
+            return respond_500();
+        },
+    };
+    debug!("my_url: {}", my_url);
+
+    let response_res = Response::builder()
+        .status(302)
+        .header("Location", my_url.to_string())
+        .body(Full::from(""));
+    match response_res {
+        Ok(r) => Ok(r),
+        Err(e) => {
+            error!("failed to assemble redirect response: {}", e);
             return respond_500();
         },
     }
@@ -585,6 +718,18 @@ async fn handle_request(request: Request<Incoming>) -> Result<Response<Full<Byte
     };
 
     // authenticated-only endpoints beyond this line
+
+    if uri_path == "/forgot" {
+        return if !token_permissions.allow_write {
+            respond_403()
+        } else if request.method() == Method::GET {
+            handle_get_forgot(request).await
+        } else if request.method() == Method::POST {
+            handle_post_forgot(request).await
+        } else {
+            respond_405("GET, POST")
+        }
+    }
 
     if request.method() == Method::GET {
         handle_get(request, &token_permissions).await
